@@ -36,9 +36,8 @@
       <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
       <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
     </Style>
-    <Style TargetType="TextBlock">
-      <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-    </Style>
+    <!-- Text must inherit the owning control's foreground, including content generated at runtime. -->
+    <Style TargetType="TextBlock"/>
     <Style TargetType="Button">
       <Setter Property="Foreground" Value="White"/>
       <Setter Property="Background" Value="#202C43"/>

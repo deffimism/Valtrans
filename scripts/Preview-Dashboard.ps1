@@ -2,6 +2,14 @@ param([int]$Width = 1340, [int]$Height = 860)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 $root = Split-Path $PSScriptRoot -Parent
+$appMarkup = [xml](Get-Content -Raw -LiteralPath "$root/App.xaml")
+$namespace = [Xml.XmlNamespaceManager]::new($appMarkup.NameTable)
+$namespace.AddNamespace('p', 'http://schemas.microsoft.com/winfx/2006/xaml/presentation')
+$resources = $appMarkup.SelectSingleNode('//p:Application.Resources', $namespace)
+$resourceMarkup = '<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">' + $resources.InnerXml + '</ResourceDictionary>'
+$resourceMarkup = $resourceMarkup.Replace('pack://application:,,,/Assets/Fonts/', $root.Replace('\', '/') + '/Assets/Fonts/')
+$previewApp = [System.Windows.Application]::new()
+$previewApp.Resources = [System.Windows.Markup.XamlReader]::Parse($resourceMarkup)
 $markup = Get-Content -Raw -LiteralPath "$root/MainWindow.xaml"
 # Render the real layout without starting OCR, models, hotkeys or loading personal settings.
 $markup = $markup -replace 'x:Class="[^"]+"', ''
@@ -9,8 +17,8 @@ $markup = $markup -replace '\s+\w+="\w+_On\w+"', ''
 $markup = $markup.Replace('Source="Themes/Dashboard.xaml"', 'Source="' + $root.Replace('\', '/') + '/Themes/Dashboard.xaml"')
 $markup = $markup.Replace('Assets/Valtrans.ico', $root.Replace('\', '/') + '/Assets/Valtrans.ico')
 $markup = $markup.Replace('Assets/Valtrans-mark.png', $root.Replace('\', '/') + '/Assets/Valtrans-mark.png')
+$markup = $markup.Replace('pack://application:,,,/Assets/Fonts/', $root.Replace('\', '/') + '/Assets/Fonts/')
 $window = [System.Windows.Markup.XamlReader]::Parse($markup)
-$window.FontFamily = [System.Windows.Media.FontFamily]::new('Segoe UI, Malgun Gothic')
 $window.FindName('HotkeyBox').Text = '\'
 [xml]$project = Get-Content -LiteralPath "$root/Valtrans.csproj" -Raw
 $window.FindName('VersionText').Text = 'Valtrans ' + $project.Project.PropertyGroup.Version
@@ -24,6 +32,7 @@ $map.Content = '맵 자동 · 공통'
 [void]$window.FindName('MapCombo').Items.Add($map)
 $window.FindName('MapCombo').SelectedIndex = 0
 foreach ($name in @('OcrEnCheck','OcrJpCheck','OcrKoCheck')) { $window.FindName($name).IsChecked = $true }
+$window.FindName('OcrKoCheck').IsChecked = $false
 $pages = @('Overview','Engines','Overlay','Lab','Guide')
 $titles = @('채팅 대시보드','번역 엔진','오버레이 설정','번역 테스트 · 사전','시작 가이드 · 점검')
 $navs = @('OverviewNavigation','AdvancedModeButton','OverlayNavigation','LabNavigation','GuideNavigation')
@@ -40,7 +49,8 @@ foreach ($page in $pages) {
         foreach ($n in @('DeepLxPanel','OpenAiPanel','SimpleEnginePanel')) { $window.FindName($n).Visibility = 'Collapsed' }
     }
     if ($page -eq 'Guide') {
-        foreach ($n in @('AutoRepairButton','RefreshGuideButton')) { $window.FindName($n).IsEnabled = $false }
+        foreach ($n in @('AutoRepairButton','RecommendedPrepareButton')) { $window.FindName($n).IsEnabled = $false }
+        $window.FindName('RecommendedPrepareButton').Content = '권장 엔진 준비됨'
     }
     $visual = $window.Content
     $visual.Measure([System.Windows.Size]::new($Width, $Height))
