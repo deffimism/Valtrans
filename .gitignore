@@ -8,3 +8,5 @@ publish-*/
 *.suo
 artifacts/
 __pycache__/
+server/.env
+server/data/events.json

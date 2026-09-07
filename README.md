@@ -7,8 +7,8 @@
 공식 Discord 서버에 참여할 수 있습니다: [Valtrans 공식 Discord](https://discord.gg/ZTa5EKZcsW)  
 Join our official Discord server: [Valtrans Official Discord](https://discord.gg/ZTa5EKZcsW)
 
-> **작성 기준 버전 / Documentation baseline: v0.2.0**  
-> **작성 기준일 / Last reviewed: 2026-09-07**  
+> **작성 기준 버전 / Documentation baseline: v0.2.2**<br>
+> **작성 기준일 / Last reviewed: 2026-09-08**<br>
 > 이 README는 위 버전의 사용법을 기준으로 작성되었습니다. 프로그램 버전이 올라가더라도 사용법이 변하지 않으면 README는 업데이트되지 않을 수 있습니다. 문서의 기준 버전과 설치된 앱 버전이 달라도 사용법은 동일할 수 있습니다.  
 > This README describes usage as of the version above. It may not be updated for every application release if the instructions remain unchanged. A different documentation version does not necessarily mean the instructions are outdated.
 
@@ -92,6 +92,17 @@ Windows 10/11과 **.NET 10 Desktop Runtime**이 필요합니다. 로컬 AI를 �
 6. 설정을 저장하고 **OCR 시작**, **오버레이 켜기**를 누릅니다.
 
 영역은 게임·해상도별로 저장됩니다. **전면 게임에 맞춰 OCR 영역·맵 프로필 자동 전환**을 켜면 해당 게임의 저장 프로필을 사용합니다. 해상도, 창 모드, Windows 배율을 바꾼 뒤에는 영역을 다시 확인하세요.
+
+**발로란트 추천값:** 최근 메시지 부분을 읽고 하단 입력줄을 제외하는 초기 영역입니다. 게임 실행 후 **추천 영역 → OCR 테스트 → 영역 보정** 순서로 확인하세요. 기존 저장값은 업데이트만으로 변경되지 않으며, 추천 영역을 누르면 현재 프로필에 새 추천값이 저장됩니다.
+
+| 게임 해상도 | 왼쪽 X / 위쪽 Y | 너비 × 높이 |
+|---|---|---|
+| 1280×720 | 5 / 600 | 320×96 |
+| 1920×1080 | 8 / 900 | 480×144 |
+| 2560×1440 | 11 / 1200 | 640×192 |
+| 3840×2160 | 16 / 1800 | 960×288 |
+
+좌표는 게임 화면 왼쪽 위 기준의 픽셀입니다. 다른 해상도는 높이에 비례해 계산합니다. 제공된 16:9 채팅 화면을 참고한 초기값으로, 실게임에서 모든 해상도를 검증한 값은 아닙니다. 긴 줄·채팅창 열림/닫힘·화면 비율에 따라 직접 보정하세요. 닉네임은 영역에 포함하고 인식 후 본문과 분리합니다.
 
 #### 정상적으로 생략되는 경우
 
@@ -261,6 +272,17 @@ For English and Japanese chat translated into Korean, select **EN + JP** as sour
 6. Save settings, then click **OCR 시작** (Start OCR) and **오버레이 켜기** (Show overlay).
 
 Regions are saved by game and resolution. The automatic foreground-game profile option loads the matching saved region and map. Recheck the region after changing resolution, window mode, or Windows scaling.
+
+**VALORANT preset:** a starting region for recent messages, leaving a margin below for the input row. Use **추천 영역 → OCR 테스트 → 영역 보정** (Recommended region → OCR test → Region calibration). Updating the app does not migrate saved regions; clicking Recommended region saves the new preset to the current profile.
+
+| Game resolution | Left X / top Y | Width × height |
+|---|---|---|
+| 1280×720 | 5 / 600 | 320×96 |
+| 1920×1080 | 8 / 900 | 480×144 |
+| 2560×1440 | 11 / 1200 | 640×192 |
+| 3840×2160 | 16 / 1800 | 960×288 |
+
+Coordinates are pixels relative to the game client area's top-left corner. Other resolutions scale by height. These starting values are based on the supplied 16:9 screenshots, not in-game validation at every resolution. Check long lines, open/closed chat, and non-16:9 layouts manually. Keep nicknames inside the capture region; the text parser separates them afterward.
 
 #### Messages that may be skipped normally
 

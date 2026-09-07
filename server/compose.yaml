@@ -1,0 +1,33 @@
+services:
+  valtrans-support:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    image: valtrans/support:local
+    container_name: valtrans-support
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${VALTRANS_BIND_ADDRESS:-192.168.0.19}:${VALTRANS_SUPPORT_PORT:-13020}:3080"
+    environment:
+      PORT: 3080
+      FAIRY_PROJECT_NAME: ${FAIRY_PROJECT_NAME:-valtrans}
+      FAIRY_PROJECT_URL: ${FAIRY_PROJECT_URL:-https://fairy.hada.io/}
+      VALTRANS_DOWNLOAD_URL: "${VALTRANS_DOWNLOAD_URL:-#download}"
+      FAIRY_WEBHOOK_SECRET: ${FAIRY_WEBHOOK_SECRET:?Set FAIRY_WEBHOOK_SECRET in server/.env}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN in server/.env}
+    volumes:
+      - ./data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

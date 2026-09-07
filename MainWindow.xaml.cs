@@ -922,7 +922,10 @@ public partial class MainWindow : System.Windows.Window
         _settingsService.Save(_settings);
         SetStatus("추천 영역 적용됨",
             $"{GameDisplayName(game)} · {reference.Width}×{reference.Height} " +
-            $"{(hasGameBounds ? "게임 창" : "모니터")} 기준입니다. 필요하면 직접 선택으로 미세 조정하세요.");
+            $"{(hasGameBounds ? "게임 창" : "모니터")} 기준입니다. " +
+            (game.Equals("VALORANT", StringComparison.OrdinalIgnoreCase)
+                ? "최근 메시지용 초기값 · 하단 입력줄 제외. 채팅을 띄우고 OCR 테스트로 잘림 여부를 확인한 뒤 영역 보정하세요."
+                : "필요하면 직접 선택으로 미세 조정하세요."));
         _ = RefreshQuickStartGuideAsync();
     }
 
