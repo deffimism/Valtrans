@@ -19,13 +19,17 @@ try {
   const root = await fetch(`http://127.0.0.1:${port}/`);
   if (!root.ok || !(await root.text()).includes('Valtrans')) throw new Error('static site failed');
   const config = await fetch(`http://127.0.0.1:${port}/config.js`);
-  if (!config.ok || !(await config.text()).includes('fairyProjectUrl')) throw new Error('runtime config failed');
+  if (!config.ok || !(await config.text()).includes('fairySupportUrl')) throw new Error('runtime config failed');
   const terms = await fetch(`http://127.0.0.1:${port}/terms`);
   const termsText = await terms.text();
   if (!terms.ok || !termsText.includes('이용약관') || !termsText.includes('deffimism@gmail.com')) throw new Error('terms page failed');
   const privacy = await fetch(`http://127.0.0.1:${port}/privacy`);
   const privacyText = await privacy.text();
   if (!privacy.ok || !privacyText.includes('개인정보 처리방침') || !privacyText.includes('paymentId')) throw new Error('privacy page failed');
+  const termsHead = await fetch(`http://127.0.0.1:${port}/terms`, { method: 'HEAD' });
+  if (!termsHead.ok || (await termsHead.text()) !== '') throw new Error('static HEAD request failed');
+  const donate = await fetch(`http://127.0.0.1:${port}/valtrans_donate.png`, { method: 'HEAD' });
+  if (!donate.ok || donate.headers.get('content-type') !== 'image/png') throw new Error('donation image failed');
   const payment = JSON.stringify({ event: 'payment.completed', timestamp: new Date().toISOString(), data: { paymentId: 'payment_test_001', amount: 1200, projectName: 'valtrans', source: 'payple', fairyName: 'must-not-save', fairyMessage: 'must-not-save' } });
   const paymentSignature = createHmac('sha256', secret).update(payment).digest('hex');
   const paymentRequest = { method: 'POST', headers: { 'content-type': 'application/json', 'x-fairy-signature': paymentSignature, 'x-fairy-event': 'payment.completed', 'x-fairy-timestamp': JSON.parse(payment).timestamp }, body: payment };

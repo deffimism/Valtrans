@@ -2,6 +2,7 @@ bin/
 obj/
 publish/
 publish-*/
+releases/
 .lite-build/
 .vs/
 *.user

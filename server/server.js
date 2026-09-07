@@ -1,11 +1,14 @@
 import { createServer } from 'node:http';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
-const siteRoot = resolve(root, '..', 'site');
+const packagedSiteRoot = resolve(root, 'site');
+const workspaceSiteRoot = resolve(root, '..', 'site');
+const siteRoot = existsSync(packagedSiteRoot) ? packagedSiteRoot : workspaceSiteRoot;
 const dataFile = process.env.VALTRANS_DATA_FILE || join(root, 'data', 'events.json');
 const port = Number(process.env.PORT || 3080);
 const secret = process.env.FAIRY_WEBHOOK_SECRET || '';
@@ -66,7 +69,9 @@ async function serveStatic(req, res) {
   try {
     const content = await readFile(file);
     const type = file.endsWith('.html') ? 'text/html; charset=utf-8' : file.endsWith('.css') ? 'text/css; charset=utf-8' : file.endsWith('.js') ? 'text/javascript; charset=utf-8' : file.endsWith('.png') ? 'image/png' : 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': file.endsWith('index.html') ? 'no-cache' : 'public, max-age=3600' });
+    const cacheControl = file.endsWith('.html') || file.endsWith('.css') || file.endsWith('.js') ? 'no-store' : 'public, max-age=3600';
+    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': cacheControl });
+    if (req.method === 'HEAD') return res.end();
     res.end(content);
   } catch (error) { json(res, error.code === 'ENOENT' ? 404 : 500, { error: 'not_found' }); }
 }
@@ -75,10 +80,10 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, service: 'valtrans-support' });
     if (req.method === 'GET' && url.pathname === '/config.js') {
-      const fairyUrl = process.env.FAIRY_PROJECT_URL || 'https://fairy.hada.io/';
-      const downloadUrl = process.env.VALTRANS_DOWNLOAD_URL || '#download';
+      const fairyUrl = process.env.FAIRY_SUPPORT_URL || 'https://fairy.hada.io/@valtrans';
+      const downloadUrl = process.env.VALTRANS_DOWNLOAD_URL || 'https://github.com/deffimism/Valtrans/releases';
       res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
-      return res.end(`window.VALTRANS_CONFIG=${JSON.stringify({ fairyProjectUrl: fairyUrl, downloadUrl })};`);
+      return res.end(`window.VALTRANS_CONFIG=${JSON.stringify({ fairySupportUrl: fairyUrl, downloadUrl })};`);
     }
     if (req.method === 'GET' && url.pathname === '/api/events') {
       if (!adminToken || header(req, 'authorization') !== `Bearer ${adminToken}`) return json(res, 401, { error: 'unauthorized' });
@@ -106,7 +111,7 @@ const server = createServer(async (req, res) => {
       const record = { paymentId, amount: data.amount ?? null, completedAt: timestamp, project: receivedProject || projectName, source };
       return json(res, 200, { ok: true, processed: await recordPayment(record) });
     }
-    if (req.method === 'GET') return serveStatic(req, res);
+    if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res);
     return json(res, 405, { error: 'method_not_allowed' });
   } catch (error) { json(res, error.status || 400, { error: error.message === 'body_too_large' ? error.message : 'invalid_request' }); }
 });

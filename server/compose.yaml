@@ -8,12 +8,12 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "${VALTRANS_BIND_ADDRESS:-192.168.0.19}:${VALTRANS_SUPPORT_PORT:-13020}:3080"
+      - "192.168.0.19:${VALTRANS_SUPPORT_PORT:-13020}:3080"
     environment:
       PORT: 3080
       FAIRY_PROJECT_NAME: ${FAIRY_PROJECT_NAME:-valtrans}
-      FAIRY_PROJECT_URL: ${FAIRY_PROJECT_URL:-https://fairy.hada.io/}
-      VALTRANS_DOWNLOAD_URL: "${VALTRANS_DOWNLOAD_URL:-#download}"
+      FAIRY_SUPPORT_URL: ${FAIRY_SUPPORT_URL:-https://fairy.hada.io/@valtrans}
+      VALTRANS_DOWNLOAD_URL: "${VALTRANS_DOWNLOAD_URL:-https://github.com/deffimism/Valtrans/releases}"
       FAIRY_WEBHOOK_SECRET: ${FAIRY_WEBHOOK_SECRET:?Set FAIRY_WEBHOOK_SECRET in server/.env}
       ADMIN_TOKEN: ${ADMIN_TOKEN:?Set ADMIN_TOKEN in server/.env}
     volumes:

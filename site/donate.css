@@ -1,0 +1,9 @@
+.support-panel{min-width:0}
+.support-panel>div:first-child{flex:1 1 0;min-width:0}
+.support-panel>div:first-child h2{display:block;word-break:keep-all;overflow-wrap:normal;white-space:nowrap}
+.support-actions{display:grid;flex:0 0 198px;width:198px;justify-items:end;gap:12px;min-width:0}
+.donate-banner{display:block;width:198px;height:60px;overflow:hidden;border:1px solid #eadfc9;border-radius:10px;background:#fffaf0;line-height:0;box-shadow:0 8px 22px #92755016;transition:transform .16s ease,box-shadow .16s ease}
+.donate-banner:hover{transform:translateY(-1px);box-shadow:0 12px 28px #92755024}
+.donate-banner img{display:block;width:100%;height:100%;object-fit:cover;object-position:center}
+@media(max-width:900px){.support-panel>div:first-child h2{white-space:nowrap}.support-actions{width:100%;flex:0 0 auto;justify-items:stretch}.support-actions .button{width:100%}.donate-banner{width:198px;max-width:100%;justify-self:center}}
+@media(max-width:420px){.support-panel>div:first-child h2{white-space:normal}}

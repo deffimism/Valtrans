@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         WindowStyle="None" AllowsTransparency="True" Background="#55000000"
         Topmost="True" ShowInTaskbar="False" Cursor="Cross" ResizeMode="NoResize"
+        TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="Grayscale" TextOptions.TextHintingMode="Fixed"
         KeyDown="Window_OnKeyDown" MouseLeftButtonDown="Window_OnMouseLeftButtonDown"
         MouseMove="Window_OnMouseMove" MouseLeftButtonUp="Window_OnMouseLeftButtonUp">
   <Canvas x:Name="RootCanvas">

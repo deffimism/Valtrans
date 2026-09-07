@@ -35,7 +35,7 @@
       <Setter Property="UseLayoutRounding" Value="True"/>
       <Setter Property="SnapsToDevicePixels" Value="True"/>
       <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
-      <Setter Property="TextOptions.TextRenderingMode" Value="Grayscale"/>
+      <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
       <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
     </Style>
     <!-- Text must inherit the owning control's foreground, including content generated at runtime. -->

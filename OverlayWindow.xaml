@@ -18,7 +18,8 @@
               <DataTemplate>
                 <Border Background="Transparent" CornerRadius="6" Padding="9,7" Margin="0,2">
                   <TextBlock Text="{Binding Translation}" Foreground="White" FontWeight="SemiBold"
-                             TextWrapping="Wrap"/>
+                             TextWrapping="Wrap" TextOptions.TextFormattingMode="Ideal"
+                             TextOptions.TextRenderingMode="Grayscale" TextOptions.TextHintingMode="Fixed"/>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>

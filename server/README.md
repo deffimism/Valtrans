@@ -5,9 +5,15 @@ Valtrans 소개 페이지와 Fairy 후원 webhook 수신을 한 컨테이너에�
 ## Local setup
 
 1. `.env.example`을 `server/.env`로 복사합니다.
-2. `FAIRY_PROJECT_URL`을 실제 Valtrans Fairy 프로젝트 주소로 바꿉니다.
+2. `FAIRY_SUPPORT_URL`을 실제 Valtrans Fairy 공개 후원 주소로 바꿉니다. 기본값은 `https://fairy.hada.io/@valtrans`입니다.
 3. `FAIRY_WEBHOOK_SECRET`과 `ADMIN_TOKEN`을 서로 다른 긴 임의값으로 설정합니다.
-4. `docker compose --env-file .env up -d --build`를 실행합니다.
+4. 홈서버에서는 Docker 클라이언트 설정 경로와 권한을 지정해 `valtrans-support` 서비스만 실행합니다.
+
+```bash
+sudo env DOCKER_CONFIG="$PWD/.docker-client" docker compose -f "$PWD/compose.yaml" --env-file "$PWD/.env" config
+sudo env DOCKER_CONFIG="$PWD/.docker-client" docker compose -f "$PWD/compose.yaml" --env-file "$PWD/.env" up -d --build --force-recreate --no-deps valtrans-support
+```
+
 5. Fairy에 다음 webhook 주소를 등록합니다.
 
 ```text
@@ -35,4 +41,12 @@ Node.js 20 이상이 있으면 Docker 없이 서명 테스트를 실행할 수 �
 node server/test-webhook.mjs
 ```
 
-정상 응답은 `PASS`입니다. 컨테이너 상태는 `/health`에서 확인합니다. Cloudflare Tunnel ingress는 기존 사이트와 같은 방식으로 홈서버의 `http://192.168.0.19:13020`을 가리키면 됩니다. Compose는 기본적으로 `192.168.0.19:13020`에 바인딩하며, 서버 IP가 다르면 `.env`의 `VALTRANS_BIND_ADDRESS`를 바꾸세요. 실제 Fairy 프로젝트 URL과 webhook secret은 저장소에 커밋하지 마세요.
+정상 응답은 `PASS`입니다. 홈서버에서 컨테이너 상태와 로그는 다음처럼 확인합니다.
+
+```bash
+sudo env DOCKER_CONFIG="$PWD/.docker-client" docker compose --env-file .env ps
+sudo env DOCKER_CONFIG="$PWD/.docker-client" docker compose --env-file .env logs --tail=100 valtrans-support
+curl http://192.168.0.19:13020/health
+```
+
+컨테이너는 `192.168.0.19:13020`에 고정 바인딩하며, Cloudflare Tunnel ingress는 `http://192.168.0.19:13020`을 가리키면 됩니다. 서버 IP가 변경되면 `server/compose.yaml`의 바인딩 주소도 함께 바꾸세요. 실제 Fairy 프로젝트 URL과 webhook secret은 저장소에 커밋하지 마세요.

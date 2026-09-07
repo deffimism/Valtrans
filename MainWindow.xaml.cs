@@ -1501,6 +1501,9 @@ public partial class MainWindow : System.Windows.Window
         catch (Exception ex) { System.Windows.MessageBox.Show(ex.Message, "페이지를 열 수 없습니다"); }
     }
 
+    private void OpenFairySupport_OnClick(object sender, RoutedEventArgs e) =>
+        OpenWebPage("https://fairy.hada.io/@valtrans");
+
     private async void RefreshLite_OnClick(object sender, RoutedEventArgs e)
     {
         RefreshLiteButton.IsEnabled = false;
