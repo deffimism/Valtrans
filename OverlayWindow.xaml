@@ -5,6 +5,8 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowActivated="False" ShowInTaskbar="False"
         Left="40" Top="80" MinWidth="280" MinHeight="90" ResizeMode="CanResizeWithGrip"
+        FontFamily="{StaticResource AppFontFamily}"
+        TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
   <Grid>
     <Border x:Name="OverlayRoot" Background="#6011182C" BorderBrush="#704E5D86" BorderThickness="1" CornerRadius="11"
@@ -16,7 +18,7 @@
               <DataTemplate>
                 <Border Background="Transparent" CornerRadius="6" Padding="9,7" Margin="0,2">
                   <TextBlock Text="{Binding Translation}" Foreground="White" FontWeight="SemiBold"
-                             TextWrapping="Wrap" TextOptions.TextRenderingMode="ClearType"/>
+                             TextWrapping="Wrap"/>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>

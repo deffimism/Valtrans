@@ -4,6 +4,8 @@
              StartupUri="MainWindow.xaml"
              ShutdownMode="OnMainWindowClose">
   <Application.Resources>
+    <!-- Static faces keep regular/semibold/bold consistent across WPF renderers. -->
+    <FontFamily x:Key="AppFontFamily">pack://application:,,,/Assets/Fonts/#Pretendard</FontFamily>
     <LinearGradientBrush x:Key="PageBrush" StartPoint="0,0" EndPoint="1,1">
       <GradientStop Color="#080D18" Offset="0"/>
       <GradientStop Color="#0D1526" Offset="0.58"/>
@@ -27,13 +29,13 @@
       <Setter Property="CornerRadius" Value="16"/>
     </Style>
     <Style TargetType="Window">
-      <Setter Property="FontFamily" Value="pack://application:,,,/Assets/Fonts/#Pretendard Variable"/>
+      <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}"/>
       <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
       <Setter Property="Background" Value="{StaticResource PageBrush}"/>
       <Setter Property="UseLayoutRounding" Value="True"/>
       <Setter Property="SnapsToDevicePixels" Value="True"/>
-      <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
-      <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+      <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
+      <Setter Property="TextOptions.TextRenderingMode" Value="Grayscale"/>
       <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
     </Style>
     <!-- Text must inherit the owning control's foreground, including content generated at runtime. -->
