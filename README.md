@@ -7,10 +7,13 @@
 공식 Discord 서버에 참여할 수 있습니다: [Valtrans 공식 Discord](https://discord.gg/ZTa5EKZcsW)  
 Join our official Discord server: [Valtrans Official Discord](https://discord.gg/ZTa5EKZcsW)
 
-> **작성 기준 버전 / Documentation baseline: v0.1.1**  
+> **작성 기준 버전 / Documentation baseline: v0.1.2**  
 > **작성 기준일 / Last reviewed: 2026-09-07**  
 > 이 README는 위 버전의 사용법을 기준으로 작성되었습니다. 프로그램 버전이 올라가더라도 사용법이 변하지 않으면 README는 업데이트되지 않을 수 있습니다. 문서의 기준 버전과 설치된 앱 버전이 달라도 사용법은 동일할 수 있습니다.  
 > This README describes usage as of the version above. It may not be updated for every application release if the instructions remain unchanged. A different documentation version does not necessarily mean the instructions are outdated.
+
+버전은 `주.기능.수정` 형식입니다. 새로운 기능은 두 번째 자리(기능)를 올리고, 버그 수정·UI 조정·기타 세부 수정은 세 번째 자리(수정)를 올립니다.  
+Versions use the `major.feature.patch` format. New features increase the second digit; bug fixes, UI adjustments, and other minor refinements increase the third digit.
 
 <a id="korean"></a>
 

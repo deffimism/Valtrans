@@ -107,7 +107,8 @@
               </ToggleButton.Template>
             </ToggleButton>
             <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
-                              Margin="11,6,32,6" VerticalAlignment="Center" IsHitTestVisible="False" TextElement.Foreground="#18243B"/>
+                              Margin="11,6,32,6" VerticalAlignment="Center" IsHitTestVisible="False"
+                              TextElement.Foreground="#0F172A"/>
             <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}"
                    AllowsTransparency="True" Focusable="False" PopupAnimation="None">
               <Border Background="White" BorderBrush="#D5DDEA" BorderThickness="1" CornerRadius="8" Padding="4"
@@ -134,7 +135,7 @@
       <Setter.Value>
         <ControlTemplate TargetType="ComboBoxItem">
           <Border x:Name="Chrome" CornerRadius="5" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
-            <ContentPresenter/>
+            <ContentPresenter TextElement.Foreground="#0F172A"/>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#EEF0FF"/></Trigger>

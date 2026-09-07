@@ -27,7 +27,7 @@
       <Setter Property="CornerRadius" Value="16"/>
     </Style>
     <Style TargetType="Window">
-      <Setter Property="FontFamily" Value="Segoe UI, Malgun Gothic"/>
+      <Setter Property="FontFamily" Value="pack://application:,,,/Assets/Fonts/#Pretendard Variable"/>
       <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
       <Setter Property="Background" Value="{StaticResource PageBrush}"/>
       <Setter Property="UseLayoutRounding" Value="True"/>
@@ -105,18 +105,20 @@
       <Setter Property="Foreground" Value="#0F172A"/>
     </Style>
     <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#0F172A"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderBrush" Value="#334155"/>
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#0F172A"/>
+      <Setter Property="BorderBrush" Value="#CBD5E1"/>
       <Setter Property="Padding" Value="9,7"/>
-      <Setter Property="CaretBrush" Value="White"/>
+      <Setter Property="CaretBrush" Value="#0F172A"/>
+      <Setter Property="SelectionBrush" Value="#C7D2FE"/>
     </Style>
     <Style TargetType="PasswordBox">
-      <Setter Property="Background" Value="#0F172A"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderBrush" Value="#334155"/>
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#0F172A"/>
+      <Setter Property="BorderBrush" Value="#CBD5E1"/>
       <Setter Property="Padding" Value="9,7"/>
-      <Setter Property="CaretBrush" Value="White"/>
+      <Setter Property="CaretBrush" Value="#0F172A"/>
+      <Setter Property="SelectionBrush" Value="#C7D2FE"/>
     </Style>
     <Style TargetType="ProgressBar">
       <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
