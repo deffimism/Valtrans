@@ -1,0 +1,10 @@
+bin/
+obj/
+publish/
+publish-*/
+.lite-build/
+.vs/
+*.user
+*.suo
+artifacts/
+__pycache__/

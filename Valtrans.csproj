@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseSystemDrawing>true</UseSystemDrawing>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>Valtrans</AssemblyName>
+    <RootNamespace>Valtrans</RootNamespace>
+    <Version>0.1.1</Version>
+    <FileVersion>0.1.1.0</FileVersion>
+    <Product>Valtrans Game Chat Translator</Product>
+    <ApplicationIcon>Assets\Valtrans.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\Valtrans.ico" />
+    <EmbeddedResource Include="Assets\ValtransLiteHost.exe" LogicalName="Valtrans.Assets.ValtransLiteHost.exe" />
+  </ItemGroup>
+</Project>
