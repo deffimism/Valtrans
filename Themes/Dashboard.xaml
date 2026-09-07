@@ -33,13 +33,19 @@
         <ControlTemplate TargetType="Button">
           <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+            <TextBlock Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="NoWrap"/>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#818CF8"/></Trigger>
             <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#4F46E5"/></Trigger>
             <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.75"/></Trigger>
-            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Chrome" Property="Background" Value="#F8FAFC"/>
+              <Setter TargetName="Chrome" Property="BorderBrush" Value="#CBD5E1"/>
+              <Setter Property="Foreground" Value="#64748B"/>
+              <Setter Property="Cursor" Value="Arrow"/>
+            </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
@@ -51,7 +57,7 @@
     <Setter Property="Foreground" Value="White"/>
   </Style>
   <Style x:Key="NavigationItem" TargetType="RadioButton">
-    <Setter Property="Foreground" Value="#586A82"/>
+    <Setter Property="Foreground" Value="#0F172A"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="FontSize" Value="13"/>
     <Setter Property="Padding" Value="15,13"/>
@@ -62,13 +68,14 @@
         <ControlTemplate TargetType="RadioButton">
           <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="9"
                   Padding="{TemplateBinding Padding}" BorderBrush="Transparent" BorderThickness="1">
-            <ContentPresenter VerticalAlignment="Center" RecognizesAccessKey="True"/>
+            <ContentPresenter VerticalAlignment="Center" RecognizesAccessKey="True"
+                              TextElement.Foreground="{TemplateBinding Foreground}"/>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#F1F4FA"/></Trigger>
             <Trigger Property="IsChecked" Value="True">
               <Setter TargetName="Chrome" Property="Background" Value="#EEF0FF"/>
-              <Setter Property="Foreground" Value="#4338CA"/>
+              <Setter Property="Foreground" Value="#3730A3"/>
               <Setter Property="FontWeight" Value="SemiBold"/>
             </Trigger>
             <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#818CF8"/></Trigger>
@@ -183,8 +190,34 @@
     <Setter Property="MinHeight" Value="36"/>
   </Style>
   <Style TargetType="CheckBox">
-    <Setter Property="Foreground" Value="#334155"/>
+    <Setter Property="Foreground" Value="#0F172A"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="CheckBox">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border x:Name="Box" Width="15" Height="15" CornerRadius="3" Background="White"
+                    BorderBrush="#94A3B8" BorderThickness="1" VerticalAlignment="Center"/>
+            <Path x:Name="Check" Data="M 3,7 L 6,10 L 12,3" Stroke="White" StrokeThickness="2"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                  Width="15" Height="15" VerticalAlignment="Center" Visibility="Collapsed"/>
+            <ContentPresenter Grid.Column="1" Margin="5,0,0,0" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                              RecognizesAccessKey="True" TextElement.Foreground="{TemplateBinding Foreground}"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Box" Property="Background" Value="#4F46E5"/>
+              <Setter TargetName="Box" Property="BorderBrush" Value="#4F46E5"/>
+              <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#4F46E5"/></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
   <Style TargetType="ProgressBar">
     <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>

@@ -8,6 +8,7 @@ $markup = $markup -replace 'x:Class="[^"]+"', ''
 $markup = $markup -replace '\s+\w+="\w+_On\w+"', ''
 $markup = $markup.Replace('Source="Themes/Dashboard.xaml"', 'Source="' + $root.Replace('\', '/') + '/Themes/Dashboard.xaml"')
 $markup = $markup.Replace('Assets/Valtrans.ico', $root.Replace('\', '/') + '/Assets/Valtrans.ico')
+$markup = $markup.Replace('Assets/Valtrans-mark.png', $root.Replace('\', '/') + '/Assets/Valtrans-mark.png')
 $window = [System.Windows.Markup.XamlReader]::Parse($markup)
 $window.FontFamily = [System.Windows.Media.FontFamily]::new('Segoe UI, Malgun Gothic')
 $window.FindName('HotkeyBox').Text = '\'
@@ -37,6 +38,9 @@ foreach ($page in $pages) {
     if ($page -eq 'Engines') {
         foreach ($n in @('HybridPanel','LitePanel','LocalAiPanel')) { $window.FindName($n).Visibility = 'Visible' }
         foreach ($n in @('DeepLxPanel','OpenAiPanel','SimpleEnginePanel')) { $window.FindName($n).Visibility = 'Collapsed' }
+    }
+    if ($page -eq 'Guide') {
+        foreach ($n in @('AutoRepairButton','RefreshGuideButton')) { $window.FindName($n).IsEnabled = $false }
     }
     $visual = $window.Content
     $visual.Measure([System.Windows.Size]::new($Width, $Height))

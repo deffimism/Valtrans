@@ -50,12 +50,18 @@
           <ControlTemplate TargetType="Button">
             <Border x:Name="Border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="1" CornerRadius="9" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              <TextBlock Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="NoWrap"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Border" Property="Background" Value="#2B3A56"/></Trigger>
               <Trigger Property="IsPressed" Value="True"><Setter TargetName="Border" Property="Opacity" Value="0.82"/></Trigger>
-              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Border" Property="Background" Value="#F8FAFC"/>
+                <Setter TargetName="Border" Property="BorderBrush" Value="#CBD5E1"/>
+                <Setter Property="Foreground" Value="#64748B"/>
+                <Setter Property="Cursor" Value="Arrow"/>
+              </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>

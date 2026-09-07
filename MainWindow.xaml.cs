@@ -516,7 +516,6 @@ public partial class MainWindow : System.Windows.Window
     private void ApplyAdvancedModePresentation()
     {
         if (AdvancedModeButton is null) return;
-        AdvancedModeButton.Content = "번역 엔진";
         AdvancedOcrPanel.Visibility = Visibility.Visible;
         SimpleOcrSummaryPanel.Visibility = Visibility.Visible;
         GlossaryExpander.Visibility = Visibility.Visible;
