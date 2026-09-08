@@ -12,6 +12,7 @@ $rejections = @(
     @('please wait','待って待って待って','JP'),
     @('please wait until I flash','please wait until I flash','KO'),
     @('maybe she is near us','그녀가 우리 근처에 있어','KO'),
+    @('그녀는 오지 않을 수도 있어','She is not coming','EN'),
     @('she is not coming today','그녀는 오늘 와','KO'),
     @('do not move until I flash','내가 섬광 쓸 때까지 움직여','KO'),
     @('do not move until I flash','내가 섬광 쓸 때까지 움직이지 않았어','KO'),
@@ -32,6 +33,7 @@ foreach ($case in $rejections) {
 $accepted = @(
     @('wait until I flash','내가 섬광 쓸 때까지 기다려','KO'),
     @('maybe she is near us','아마 우리 근처에 있어','KO'),
+    @('She might not come','그녀는 오지 않을 수도 있어','KO'),
     @('do not push left, go right','왼쪽으로 밀지 말고 오른쪽으로 가','KO'),
     @('左には行かないで、右に行って','Go right without going left','EN'),
     @('右には誰もいないと思います','오른쪽엔 아무도 없는 것 같아','KO'),

@@ -16,7 +16,7 @@ public static class LiteTranslationGuard
     private static readonly Regex Prohibition = Pattern(
         @"(?:^|[.!?,;]\s*|\bplease\s+)(?:do\s+not|don['’]?t|avoid|stop)\b|\b(?:must|should)\s+not\b|\bwithout\b|[가-힣]+지(?:는)?\s*마|말(?:고|자)|금지|그만|멈춰|ないで|ないように|禁止|(?:する|行く|来る)な(?:[\s、。!！]|$)");
     private static readonly Regex Uncertain = Pattern(
-        @"\b(?:maybe|probably|perhaps|might|seems?)\b|\bcould\s+be\b|\bi\s+think\b|아마|추정|어쩌면|같(?:아|음|다|습니다)|일\s*수도|多分|たぶん|かも|と思|ようです|おそらく");
+        @"\b(?:maybe|probably|perhaps|might|seems?)\b|\bcould\s+be\b|\bi\s+think\b|아마|추정|어쩌면|같(?:아|음|다|습니다)|(?:일|할|될|올|갈|볼|않을|있을|없을)\s*수도|多分|たぶん|かも|と思|ようです|おそらく");
     private static readonly Regex RepeatedWords = Pattern(@"(?<![\p{L}\p{N}])(?<phrase>[\p{L}\p{N}]+(?:\s+[\p{L}\p{N}]+){0,3}?)(?<repeat>[\s,.!?、。]+\k<phrase>){2,}(?![\p{L}\p{N}])");
     private static readonly Regex RepeatedCjk = Pattern(@"(?<phrase>[\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]{2,12}?)(?<repeat>\k<phrase>){2,}");
     private static readonly Regex Digits = Pattern(@"(?<!\d)\d{1,4}(?!\d)");

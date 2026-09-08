@@ -45,8 +45,12 @@ public static partial class BriefingTranslationGuard
         return translated;
     }
 
-    private static string CompactCommonCallout(string value, string targetLanguage)
+    // Formatting only: never add inferred negation/uncertainty markers to model output.
+    public static string CompactCommonCallout(string value, string targetLanguage)
     {
+        if (value.Contains('\n'))
+            return string.Join(Environment.NewLine, value.Replace("\r", "").Split('\n')
+                .Select(line => CompactCommonCallout(line, targetLanguage)));
         value = value.Trim();
         if (targetLanguage == "EN")
             value = EnglishTherePattern().Replace(value, match =>
@@ -110,7 +114,7 @@ public static partial class BriefingTranslationGuard
     [GeneratedRegex(@"(?ix)^\s*(?:there\s+(?:is|are)\s+)?(one|two|three|four|five|\d+)\s+(enemy|enemies|player|players)\s+(?:at|in|on)\s+(.+?)\s*[.!]?$", RegexOptions.IgnoreCase)]
     private static partial Regex EnglishTherePattern();
 
-    [GeneratedRegex(@"^\s*(.+?)(?:에|에서)\s*(?:적\s*)?(\d+)\s*명(?:이|은|가)?\s*(?:있(?:어|음|다))?\s*[.!]?$")]
+    [GeneratedRegex(@"^\s*(.+?)(?:에|에서)\s*(?:적(?:이|은|가)?\s*)?(\d+)\s*명(?:이|은|가)?\s*(?:있(?:습니다|어요|어|음|다))?\s*[.!]?$")]
     private static partial Regex KoreanPresencePattern();
 
     [GeneratedRegex(@"(?<![\p{L}\p{N}])([\p{L}][\p{L}\p{N}'-]{0,20})(?:에|에서)\s*(?:적\s*)?(\d+)\s*명\s*(?:있(?:어|음|다))")]
@@ -131,6 +135,6 @@ public static partial class BriefingTranslationGuard
     [GeneratedRegex(@"(?:아직\s*)?(?:회전|로테)(?:하)?지\s*마(?:세요)?|(?:회전|로테)하지\s*말자")]
     private static partial Regex KoreanNoRotatePattern();
 
-    [GeneratedRegex(@"^\s*(.+?)(?:に|で)\s*敵?\s*(\d+)\s*(?:人)?\s*(?:いる|います)?\s*[。.!]?$")]
+    [GeneratedRegex(@"^\s*(.+?)(?:に|で)\s*(?:敵(?:が|は)?)?\s*(\d+)\s*(?:人)?\s*(?:いる|います)?\s*[。.!]?$")]
     private static partial Regex JapanesePresencePattern();
 }

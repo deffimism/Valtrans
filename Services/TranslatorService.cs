@@ -86,6 +86,7 @@ public sealed class TranslatorService
         else
             throw new InvalidOperationException("지원하지 않는 번역 엔진입니다. 무료 로컬 엔진을 선택해 주세요.");
 
+        result = BriefingTranslationGuard.CompactCommonCallout(result, targetLanguage);
         var guarded = TranslationFactGuard.Apply(text, result, targetLanguage, settings, _glossary);
         if (guarded.Adjusted)
         {
@@ -120,14 +121,16 @@ public sealed class TranslatorService
                     watch.Stop();
                     if (!ChatTextSanitizer.HasMeaningfulContent(raw))
                         throw new InvalidOperationException("유효한 번역 결과가 없습니다.");
-                    var briefingGuarded = BriefingTranslationGuard.Apply(probe.Source, raw, probe.TargetLanguage);
+                    var briefingGuarded = BriefingTranslationGuard.CompactCommonCallout(raw, probe.TargetLanguage);
                     var factGuarded = TranslationFactGuard.Apply(probe.Source, briefingGuarded,
                         probe.TargetLanguage, settings, _glossary);
                     var adjusted = factGuarded.Adjusted ||
                                    !NormalizeForComparison(raw).Equals(NormalizeForComparison(briefingGuarded),
                                        StringComparison.OrdinalIgnoreCase);
+                    var planned = engine == "Lite" && LiteUncertaintyPlan.Create(probe.Source, settings, _glossary) is not null;
                     results.Add(new EngineCompatibilityResult(EngineDisplayName(engine, settings), probe.Name,
-                        true, adjusted, watch.ElapsedMilliseconds, adjusted ? "안전 보정 필요" : "원문 사실 보존"));
+                        true, adjusted || planned, watch.ElapsedMilliseconds,
+                        planned ? "추정 분리·중간 번역 보존 검사 통과" : adjusted ? "콜아웃 보정 · 기본 검사 통과" : "응답·기본 보존 검사 통과"));
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception ex)
@@ -150,8 +153,8 @@ public sealed class TranslatorService
             var normalized = ChatTextSanitizer.ConvertCommonRomanizedJapanese(
                 _glossary.PrepareForLocalTranslation(source, settings));
             var sourceLanguage = DetectSourceLanguage(normalized);
-            var result = await _lite.TranslateAsync(new[] { normalized }, sourceLanguage, targetLanguage,
-                cancellationToken);
+            var result = await TranslateLiteBatchAsync(new[] { source }, new[] { normalized }, sourceLanguage,
+                targetLanguage, settings, cancellationToken);
             return Clean(LiteTranslationGuard.Validate(source, result.FirstOrDefault() ?? "", targetLanguage,
                 settings, _glossary), false);
         }
@@ -179,7 +182,9 @@ public sealed class TranslatorService
 
     private static string FriendlyCompatibilityError(Exception error) => error switch
     {
-        OperationCanceledException => "검사 시간 초과",
+        OperationCanceledException or TimeoutException => "검사 시간 초과",
+        _ when error.Message.StartsWith("Lite 번역 확인 필요 · ", StringComparison.Ordinal) =>
+            "품질 검사 보류 · " + error.Message.Split(" · ")[1],
         _ when error.Message.Contains("비어", StringComparison.OrdinalIgnoreCase) => "빈 결과",
         _ => error.GetType().Name.Replace("Exception", "", StringComparison.OrdinalIgnoreCase)
     };
@@ -434,6 +439,7 @@ public sealed class TranslatorService
             var originalLines = text.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries);
             var output = new string[lines.Length];
             var pending = new List<string>();
+            var pendingOriginals = new List<string>();
             var pendingIndexes = new List<int>();
             for (var index = 0; index < lines.Length; index++)
             {
@@ -445,11 +451,13 @@ public sealed class TranslatorService
                     continue;
                 }
                 pending.Add(lines[index]);
+                pendingOriginals.Add(original);
                 pendingIndexes.Add(index);
             }
             if (pending.Count > 0)
             {
-                var modelResults = await _lite.TranslateAsync(pending, source, targetLanguage, cancellationToken);
+                var modelResults = await TranslateLiteBatchAsync(pendingOriginals, pending, source,
+                    targetLanguage, settings, cancellationToken);
                 for (var index = 0; index < pendingIndexes.Count; index++)
                     output[pendingIndexes[index]] = modelResults[index];
             }
@@ -457,11 +465,61 @@ public sealed class TranslatorService
         }
         else
         {
-            translated = await _lite.TranslateAsync(lines, source, targetLanguage, cancellationToken);
+            translated = await TranslateLiteBatchAsync(new[] { text }, lines, source,
+                targetLanguage, settings, cancellationToken);
         }
         var result = preserveLines ? string.Join(Environment.NewLine, translated) : translated.FirstOrDefault() ?? "";
         // Do not manufacture a negation/uncertainty prefix around a faulty Lite result.
         return Clean(LiteTranslationGuard.Validate(text, result, targetLanguage, settings, _glossary), preserveLines);
+    }
+
+    private async Task<IReadOnlyList<string>> TranslateLiteBatchAsync(IReadOnlyList<string> originals,
+        IReadOnlyList<string> normalized, string source, string target, AppSettings settings,
+        CancellationToken cancellationToken)
+    {
+        var plans = originals.Select(line => LiteUncertaintyPlan.Create(line, settings, _glossary)).ToArray();
+        var inputs = normalized.Select((line, index) => plans[index]?.Core ?? line).ToArray();
+        IReadOnlyList<string> raw;
+        if (source == "JP" && target == "KO" || source == "KO" && target == "JP")
+        {
+            // Inspect the English pivot before the second model can discard facts.
+            // Known complete pivot callouts use the same dictionary as game chat.
+            var pivot = await _lite.TranslateAsync(inputs, source, "EN", cancellationToken);
+            var resolved = new string[inputs.Length];
+            var pending = new List<string>();
+            var indexes = new List<int>();
+            for (var index = 0; index < inputs.Length; index++)
+            {
+                var originalCore = plans[index]?.Core ?? originals[index];
+                var checkedPivot = LiteTranslationGuard.Validate(originalCore, pivot[index], "EN", settings, _glossary);
+                if (_glossary.TryTranslateStructuredCallout(checkedPivot, target, settings, out var callout))
+                    resolved[index] = callout;
+                else
+                {
+                    pending.Add(checkedPivot);
+                    indexes.Add(index);
+                }
+            }
+            if (pending.Count > 0)
+            {
+                var second = await _lite.TranslateAsync(pending, "EN", target, cancellationToken);
+                for (var index = 0; index < indexes.Count; index++)
+                    resolved[indexes[index]] = LiteTranslationGuard.Validate(pending[index], second[index], target, settings, _glossary);
+            }
+            raw = resolved;
+        }
+        else raw = await _lite.TranslateAsync(inputs, source, target, cancellationToken);
+        var result = raw.ToArray();
+        for (var index = 0; index < plans.Length; index++)
+        {
+            if (plans[index] is not { } plan) continue;
+            // Validate the model's core before reattaching the explicitly parsed
+            // source uncertainty; a missing negative or direction still fails.
+            var core = LiteTranslationGuard.Validate(plan.Core, raw[index], target, settings, _glossary);
+            result[index] = LiteTranslationGuard.Validate(originals[index], plan.Compose(core, target),
+                target, settings, _glossary);
+        }
+        return result;
     }
 
     public async Task TestOpenAiConnectionAsync(string apiKey, CancellationToken cancellationToken = default)

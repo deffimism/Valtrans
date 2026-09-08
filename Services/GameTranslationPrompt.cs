@@ -26,6 +26,14 @@ public static class GameTranslationPrompt
             [Translation Tasks]
             Translate the source text into {language}. Output only the translation.
             Use natural team chat, not a summary. Preserve meaning before brevity; there is no character limit.
+            For tactical briefings, use short FPS callouts rather than formal complete sentences.
+            Omit redundant introductions and polite endings only when meaning stays unchanged.
+            A/B/C plus an area form ONE location: B Heaven, A Main, C Long. Keep the site letter attached to the area.
+            Heaven/Hell/Main are game positions, not ordinary meanings; never turn B Heaven into 'B has ... in Heaven'.
+            For a simple location/count report, omit redundant 'there are', 'people', and 'enemies'.
+            Do not remove an explicit teammate/ally label or an action such as moving, watching, or waiting.
+            Output style examples in {language}: {StyleExamples(target)}
+            Keep uncertainty, negation, conditions, timing, and speaker actions even when this requires a longer phrase.
             Keep each direction/count with its subject, and each negation/uncertainty/condition with its action.
             Preserve names and map labels. Interpret slang in context; do not invent tactics or precise HP.
             {(preserveLines ? "Keep the same line count and order." : "Return one line unless a line break is required to preserve meaning.")}
@@ -35,4 +43,15 @@ public static class GameTranslationPrompt
             {source}
             """;
     }
+
+    private static string StyleExamples(string target) => target switch
+    {
+        "KO" => "'two B heaven' -> 'B 헤븐 2명'; 'maybe two B heaven' -> 'B 헤븐 아마 2명'; " +
+                "'not A main, B heaven' -> 'A 메인 아님, B 헤븐'; 'wait until I flash' -> '내가 섬광 쓸 때까지 기다려'.",
+        "JP" => "'B 헤븐에 두명' -> 'Bヘブン2人'; '아마 B 헤븐 두명' -> 'Bヘブンたぶん2人'; " +
+                "'A 메인 말고 B 헤븐' -> 'AメインじゃなくBヘブン'; '내가 섬광 쓸 때까지 기다려' -> '自分がフラッシュを入れるまで待って'.",
+        _ => "'B 헤븐에 두명' -> '2 B Heaven'; '아마 B 헤븐 두명' -> 'maybe 2 B Heaven'; " +
+             "'A 메인 말고 B 헤븐' -> 'not A Main, B Heaven'; '아군 둘 B 헤븐' -> '2 teammates B Heaven'; " +
+             "'내가 섬광 쓸 때까지 기다려' -> 'wait until I flash'; '왼쪽으로 가지 마' -> \"don't go left\"."
+    };
 }

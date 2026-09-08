@@ -503,7 +503,7 @@ public sealed partial class GlossaryService
 
         var noEnemyPatterns = new[]
         {
-            @"^(?:no\s+(?:one|enemy|enemies)|nobody|none)(?:\s+(?:at|in|on))?\s+(?<location>.+?)[.!]?$",
+            @"^(?:no\s+(?:one|enemy|enemies)|nobody|none)(?:\s+(?:is|are))?(?:\s+(?:at|in|on))?(?:\s+the)?\s+(?<location>.+?)[.!]?$",
             @"^(?<location>.+?)(?:에|에서)?\s*(?:적|사람|아무도)?\s*(?:없어|없음|없다)[.!]?$",
             @"^(?<location>.+?)(?:に|で)?\s*(?:敵(?:は|が)?|誰も)?\s*(?:いない|なし)[。.!]?$"
         };
@@ -593,7 +593,7 @@ public sealed partial class GlossaryService
 
         var presencePatterns = new[]
         {
-            @"^(?<location>.+?)(?:에|에서)\s*(?:적|상대)(?:이|가)?\s*(?<count>한|두|세|네|\d+)\s*명(?:이|가)?\s*(?:있(?:어|음|다))?\s*[.!]?$",
+            @"^(?<location>.+?)(?:에|에서)\s*(?:(?:적|상대)(?:이|가)?\s*)?(?<count>한|두|세|네|\d+)\s*명(?:이|가)?\s*(?:있(?:습니다|어요|어|음|다))?\s*[.!]?$",
             @"^(?:적|상대)\s*(?<count>한|두|세|네|\d+)\s*명\s*(?<location>.+?)\s*[.!]?$",
             @"^(?<location>.+?)(?:に|で)\s*(?:敵(?:が)?\s*)?(?<count>一|二|三|四|\d+)\s*(?:人)?\s*(?:いる|います)?\s*[。.!]?$",
             @"^(?:敵(?:が)?\s*)?(?<location>.+?)\s+(?<count>一|二|三|四|\d+)\s*(?:人)?\s*(?:いる|います)?[。.!]?$",
@@ -614,7 +614,7 @@ public sealed partial class GlossaryService
             {
                 "KO" => $"{displayLocation} {count}",
                 "JP" => $"{displayLocation}{count}",
-                _ => $"{count} {displayLocation.ToLowerInvariant()}"
+                _ => $"{count} {(Regex.IsMatch(displayLocation, @"^[ABC]\s") ? displayLocation : displayLocation.ToLowerInvariant())}"
             };
             return true;
         }
@@ -646,8 +646,12 @@ public sealed partial class GlossaryService
     {
         value = value.Trim().TrimEnd('.', '。', '!', '?');
         value = Regex.Replace(value, @"^(?:at|in|on|to)\s+", "", RegexOptions.IgnoreCase);
-        value = Regex.Replace(value, @"(?:에|에서|로|으로|に|で|へ)$", "");
+        value = Regex.Replace(value, @"(?:에서|으로|에|로|には|では|に|で|へ)$", "");
         value = NormalizeLocations(value, settings);
+        var compound = Regex.Match(value, @"^(?<site>[ABC])\s*(?<area>.+)$", RegexOptions.IgnoreCase);
+        if (compound.Success && IsLikelyLocation(compound.Groups["area"].Value, settings))
+            return compound.Groups["site"].Value.ToUpperInvariant() + " " +
+                   NormalizeCalloutLocation(compound.Groups["area"].Value, settings);
         if (Regex.IsMatch(value, @"^[ABC]$", RegexOptions.IgnoreCase)) return value.ToUpperInvariant();
         var canonical = SelectedLocations(settings).Values
             .FirstOrDefault(location => location.Equals(value, StringComparison.OrdinalIgnoreCase));
@@ -665,6 +669,8 @@ public sealed partial class GlossaryService
     private static bool IsLikelyLocation(string value, AppSettings settings)
     {
         if (Regex.IsMatch(value, @"^[ABC]$", RegexOptions.IgnoreCase)) return true;
+        var compound = Regex.Match(value, @"^[ABC]\s+(?<area>.+)$", RegexOptions.IgnoreCase);
+        if (compound.Success) return IsLikelyLocation(compound.Groups["area"].Value, settings);
         var generic = new[]
         {
             "Mid", "Main", "Site", "Heaven", "Hell", "Short", "Long", "Link", "Spawn",
@@ -688,6 +694,10 @@ public sealed partial class GlossaryService
 
     private static string LocalizeCalloutLocation(string location, string target, AppSettings? settings = null)
     {
+        var compound = Regex.Match(location, @"^(?<site>[ABC])\s+(?<area>.+)$", RegexOptions.IgnoreCase);
+        if (compound.Success)
+            return compound.Groups["site"].Value.ToUpperInvariant() + " " +
+                   LocalizeCalloutLocation(compound.Groups["area"].Value, target, settings);
         var localized = target switch
         {
             "KO" => location.ToLowerInvariant() switch

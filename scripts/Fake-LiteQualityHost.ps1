@@ -15,6 +15,9 @@ while ($null -ne ($line = [Console]::ReadLine())) {
             'Negative' { $result.translations = @('오른쪽으로 가') }
             'WrongCount' { $result.translations = @('하나','둘') }
             'WrongType' { $result.translations = @(42) }
+            'PivotGood' { $result.translations = @(if ($request.source -eq 'ja') { 'She might not come' } else { '아마 그녀는 오지 않아' }) }
+            'PivotFirstLoss' { $result.translations = @('She is coming') }
+            'PivotSecondLoss' { $result.translations = @(if ($request.source -eq 'ja') { 'She might not come' } else { '그녀는 와' }) }
         }
     }
     [Console]::WriteLine((@{id=$request.id;ok=$true;result=$result} | ConvertTo-Json -Depth 5 -Compress))

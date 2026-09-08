@@ -337,12 +337,19 @@ public partial class MainWindow : System.Windows.Window
             var report = await _translator.TestCompatibilityAsync(_settings, timeout.Token);
             var failedEngines = report.Results.Where(result => !result.Success)
                 .Select(result => result.Engine).Distinct().ToArray();
+            var localAiPassed = _settings.TranslationProvider == "Hybrid" &&
+                report.Results.Any(result => result.Engine != "Valtrans Lite") &&
+                report.Results.Where(result => result.Engine != "Valtrans Lite").All(result => result.Success);
             var summary = report.Success
                 ? report.Adjusted == 0
-                    ? $"정상 · {report.Passed}/{report.Total} · 안전 보정 없이 사실 보존 · 평균 {report.AverageDurationMs:N0}ms"
-                    : $"사용 가능 · {report.Passed}/{report.Total} · {report.Adjusted}건은 안전 보정됨 · 평균 {report.AverageDurationMs:N0}ms"
-                : $"확인 필요 · {report.Passed}/{report.Total} 성공 · {string.Join(", ", failedEngines)}";
-            RegressionStatusText.Text = summary;
+                    ? $"정상 · {report.Passed}/{report.Total} · 기본 보존 검사 통과 · 평균 {report.AverageDurationMs:N0}ms"
+                    : $"사용 가능 · {report.Passed}/{report.Total} · {report.Adjusted}건 보존·콜아웃 처리 적용 · 평균 {report.AverageDurationMs:N0}ms"
+                : localAiPassed
+                    ? $"AI 사용 가능 · Lite 대체 품질 확인 필요 · {report.Passed}/{report.Total} 통과"
+                    : $"확인 필요 · {report.Passed}/{report.Total} 성공 · {string.Join(", ", failedEngines)}";
+            var details = string.Join(Environment.NewLine, report.Results.Select(result =>
+                $"{(result.Success ? "✓" : "✕")} {result.Engine} · {result.Probe} · {result.Detail} · {result.DurationMs:N0}ms"));
+            RegressionStatusText.Text = summary + Environment.NewLine + details;
             RegressionStatusText.Foreground = new SolidColorBrush(report.Success
                 ? report.Adjusted == 0 ? Color.FromRgb(4, 120, 87) : Color.FromRgb(154, 91, 10)
                 : Color.FromRgb(180, 35, 58));
@@ -2976,8 +2983,11 @@ public partial class MainWindow : System.Windows.Window
 
     private void ApplySettingsToUi()
     {
-        var version = typeof(MainWindow).Assembly.GetName().Version;
-        VersionText.Text = $"Valtrans {version?.Major}.{version?.Minor}.{version?.Build} · Windows 10/11 · 시스템 OCR";
+        var assembly = typeof(MainWindow).Assembly;
+        var version = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0]
+            ?? assembly.GetName().Version?.ToString(3);
+        VersionText.Text = $"Valtrans {version} · Windows 10/11 · 시스템 OCR";
         ApiKeyBox.Password = _settings.ApiKey;
         DeepLApiKeyBox.Password = _settings.DeepLApiKey;
         if (_settings.DeepLxMode is not ("Public" or "Docker")) _settings.DeepLxMode = "Public";
