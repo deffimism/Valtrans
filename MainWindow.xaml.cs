@@ -184,7 +184,18 @@ public partial class MainWindow : System.Windows.Window
 
             var languageStates = _languagePacks.GetSupportedLanguageStatus();
             var missingLanguages = _settings.OcrLanguages.Where(code => !languageStates.GetValueOrDefault(code)).ToArray();
-            if (missingLanguages.Length == 0)
+            if (_settings.OcrEngine == "Paddle")
+            {
+                if (_paddleOcr.IsReady) lines.Add("✓ PaddleOCR-VL 모델 준비됨 · Windows 언어팩 불필요");
+                else
+                {
+                    lines.Add(PaddleOcrService.HasRuntimeFiles(_settings.PaddleOcrRuntime)
+                        ? "△ PaddleOCR-VL 실행 환경 있음 · 로컬 OCR 준비 · 확인을 눌러 주세요"
+                        : "✕ PaddleOCR-VL 실행 환경 설치 필요 · OCR 설정 · 진단에서 준비하세요");
+                    blocking++;
+                }
+            }
+            else if (missingLanguages.Length == 0)
                 lines.Add($"✓ Windows OCR 언어팩 · {string.Join("/", _settings.OcrLanguages)}");
             else
             {
@@ -253,9 +264,11 @@ public partial class MainWindow : System.Windows.Window
             lines.Add(_settings.AutoSwitchGameProfile
                 ? $"✓ 게임 프로필 자동 전환 켜짐 · 저장 프로필 {_settings.CaptureRegionsByGame.Count}개"
                 : "△ 게임 프로필 자동 전환 꺼짐");
-            lines.Add(_settings.OcrAutoEnhance && _settings.OcrTwoFrameConsensus
+            lines.Add(_settings.OcrEngine == "Paddle"
+                ? "✓ PaddleOCR-VL · 전체 다국어 인식, Windows 보정·두 프레임 합의 미사용"
+                : _settings.OcrAutoEnhance && _settings.OcrTwoFrameConsensus
                 ? "✓ OCR 품질 보호 · 자동 확대·대비 보정 + 두 프레임 합의"
-                : "△ OCR 품질 보호 일부 꺼짐 · 오버레이 설정에서 권장 옵션 확인");
+                : "△ OCR 품질 보호 일부 꺼짐 · OCR 설정 · 진단에서 옵션 확인");
 
             var regression = _regressionTests.Run(_settings);
             if (regression.Success)
@@ -414,7 +427,7 @@ public partial class MainWindow : System.Windows.Window
                 HotkeyHint.Text = "\\  →  전체 선택 · 번역 · 교체";
             }
 
-            if (_settings.OcrLanguages.Any(code => !_languagePacks.IsInstalled(code)))
+            if (_settings.OcrEngine == "Windows" && _settings.OcrLanguages.Any(code => !_languagePacks.IsInstalled(code)))
             {
                 DiagnosticsSummaryText.Text = "Windows OCR 언어팩을 복구하는 중입니다. 관리자 승인 후 설치 창이 닫힐 때까지 기다려 주세요.";
                 await EnsureLanguagePackAsync();
@@ -558,6 +571,7 @@ public partial class MainWindow : System.Windows.Window
     private void ApplyRecommendedSettings()
     {
         _settings.TranslationProvider = "Hybrid";
+        _settings.OcrEngine = "Paddle";
         _settings.LocalAiModel = LocalAiService.DefaultModelName;
         _settings.Model = LocalAiService.DefaultModelName;
         _settings.SendTargetLanguage = "EN";
@@ -676,22 +690,28 @@ public partial class MainWindow : System.Windows.Window
             SetGuideState(GuideRegionStateText,
                 regionReady ? $"✓ {GameDisplayName(_activeRegionGame)} 영역 저장됨" : "게임 선택 후 추천 영역", regionReady);
 
+            var paddle = _settings.OcrEngine == "Paddle";
             var selectedLanguages = IsLoaded ? ReadOcrLanguages(updateUiWhenEmpty: false) : _settings.OcrLanguages;
             var languageStates = _languagePacks.GetSupportedLanguageStatus();
-            var missingLanguages = selectedLanguages.Where(code => !languageStates.GetValueOrDefault(code)).ToArray();
+            var missingLanguages = paddle ? Array.Empty<string>()
+                : selectedLanguages.Where(code => !languageStates.GetValueOrDefault(code)).ToArray();
+            var ocrReady = paddle ? _paddleOcr.IsReady : missingLanguages.Length == 0;
             SetGuideState(GuideLanguageStateText,
-                missingLanguages.Length == 0 ? $"✓ {string.Join("/", selectedLanguages)} 언어팩 준비됨"
-                : $"설치 필요 · {string.Join("/", missingLanguages)}", missingLanguages.Length == 0);
+                paddle ? (ocrReady ? "✓ PaddleOCR-VL 준비됨" : "PaddleOCR-VL 설치·준비 필요")
+                : ocrReady ? $"✓ {string.Join("/", selectedLanguages)} 언어팩 준비됨"
+                : $"설치 필요 · {string.Join("/", missingLanguages)}", ocrReady);
 
             GuideNextActionText.Text = !providerRecommended
                 ? "‘권장값 적용’을 눌러 스마트 복합 구성을 선택하세요."
                 : !liteReady || !localReady
-                    ? "‘권장 엔진 준비’를 눌러 Lite와 Hy-MT2를 한 번에 설치하세요."
-                    : missingLanguages.Length > 0
-                        ? $"받는 채팅 카드의 ‘언어팩’을 눌러 {string.Join("/", missingLanguages)} OCR 기능을 설치하세요."
+                    ? "‘권장 엔진 준비’로 Lite와 Hy-MT2를 준비한 뒤 OCR을 별도로 준비하세요."
+                    : !ocrReady
+                        ? paddle
+                            ? "대시보드 → OCR 설정 · 진단 → OCR 엔진에서 ‘실행 환경 설치’ 후 ‘로컬 OCR 준비 · 확인’을 누르세요. NVIDIA GPU와 uv가 필요합니다."
+                            : $"받는 채팅의 ‘언어팩’으로 {string.Join("/", missingLanguages)} OCR 기능을 설치하세요."
                         : !regionReady
-                            ? "게임을 실행하고 ‘추천 영역’을 누른 뒤 OCR 테스트로 채팅만 읽히는지 확인하세요."
-                            : "준비 완료 · 보내기는 \\ 단축키, 받기는 ‘OCR 시작’을 사용하세요.";
+                            ? "게임 실행 후 ‘추천 영역 새로고침’과 OCR 테스트로 범위를 확인하세요."
+                            : "준비 완료 · 보내기는 단축키, 받기는 ‘OCR 시작’을 사용하세요.";
 
             RecommendedPrepareButton.Content = liteReady && localReady ? "권장 엔진 준비됨" : "권장 엔진 준비";
             RecommendedPrepareButton.IsEnabled = !_recommendedSetupBusy && (!liteReady || !localReady);
@@ -1525,8 +1545,10 @@ public partial class MainWindow : System.Windows.Window
         _paddleOperation?.Cancel();
         if (_ocrCancellation is not null) StopOcr();
         _paddleOcr.Stop();
-        _settings.OcrEngine = GetTag(OcrEngineCombo, "Windows");
-        PaddleOcrStatusText.Text = _settings.OcrEngine == "Paddle" ? "준비 필요 · 로컬 OCR 준비 버튼을 눌러 주세요" : "Windows OCR 사용 중";
+        _settings.OcrEngine = GetTag(OcrEngineCombo, "Paddle");
+        PaddleOcrStatusText.Text = _settings.OcrEngine == "Paddle" ? "준비 필요 · 실행 환경 설치 후 로컬 OCR 준비 버튼을 눌러 주세요" : "Windows OCR 사용 중";
+        RefreshLanguagePackStatus();
+        _ = RefreshQuickStartGuideAsync();
         _settingsService.Save(_settings);
     }
 
@@ -1590,6 +1612,7 @@ public partial class MainWindow : System.Windows.Window
         if (_ocrCancellation is not null && _settings.OcrEngine == "Paddle") StopOcr();
         _paddleOcr.Stop();
         PaddleOcrStatusText.Text = _paddleOcr.Status;
+        _ = RefreshQuickStartGuideAsync();
     }
 
     private async Task<bool> PreparePaddleOcrAsync()
@@ -1616,6 +1639,7 @@ public partial class MainWindow : System.Windows.Window
         {
             _paddleOperation = null;
             PreparePaddleOcrButton.IsEnabled = true;
+            _ = RefreshQuickStartGuideAsync();
         }
     }
 
@@ -1753,6 +1777,14 @@ public partial class MainWindow : System.Windows.Window
 
     private void RefreshLanguagePackStatus()
     {
+        if (_settings.OcrEngine == "Paddle")
+        {
+            LanguagePackStatusText.Text = "Paddle · Windows 언어팩 불필요";
+            InstallLanguagePackButton.Visibility = Visibility.Collapsed;
+            UpdateDetectedOcrLanguage();
+            return;
+        }
+        InstallLanguagePackButton.Visibility = Visibility.Visible;
         try
         {
             var states = _languagePacks.GetSupportedLanguageStatus();
@@ -2762,7 +2794,7 @@ public partial class MainWindow : System.Windows.Window
         var version = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
             .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0]
             ?? assembly.GetName().Version?.ToString(3);
-        VersionText.Text = $"Valtrans {version} · Windows 10/11 · 시스템 OCR";
+        VersionText.Text = $"Valtrans {version} · Windows 10/11 · 로컬 OCR";
         _settings.LocalAiModel = LocalAiService.NormalizeModelName(_settings.LocalAiModel);
         SetComboByTag(LocalModelCombo, _settings.LocalAiModel);
         SetComboByTag(ServerRegionCombo, GameTranslationPrompt.NormalizeRegion(_settings.ServerRegion));
@@ -2806,7 +2838,7 @@ public partial class MainWindow : System.Windows.Window
 
     private void ReadUiIntoSettings(bool preserveRegion = true)
     {
-        _settings.OcrEngine = GetTag(OcrEngineCombo, "Windows");
+        _settings.OcrEngine = GetTag(OcrEngineCombo, "Paddle");
         _settings.LocalAiModel = LocalAiService.NormalizeModelName(GetTag(LocalModelCombo, LocalAiService.DefaultModelName));
         _settings.TranslationProvider = GetTag(TranslationProviderCombo, "Hybrid");
         _settings.Model = _settings.LocalAiModel;

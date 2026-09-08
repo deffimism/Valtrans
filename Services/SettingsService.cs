@@ -28,7 +28,7 @@ public sealed class SettingsService
             var json = File.ReadAllText(SettingsPath);
             var settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions)
                            ?? new AppSettings();
-            settings.OcrEngine = settings.OcrEngine == "Paddle" ? "Paddle" : "Windows";
+            settings.OcrEngine = settings.OcrEngine == "Windows" ? "Windows" : "Paddle";
             settings.PaddleOcrRuntime ??= "";
             using (var schema = JsonDocument.Parse(json))
                 if (!schema.RootElement.TryGetProperty("SettingsSchemaVersion", out _))
@@ -115,7 +115,10 @@ public sealed class SettingsService
             // Preserve local model, language, glossary and overlay preferences.
             if (settings.TranslationProvider is not ("Hybrid" or "Ollama" or "Lite"))
                 settings.TranslationProvider = "Hybrid";
-            settings.SettingsSchemaVersion = 23;
+            // Switch existing installations once; later user choices remain available.
+            if (settings.SettingsSchemaVersion < 24)
+                settings.OcrEngine = "Paddle";
+            settings.SettingsSchemaVersion = 24;
             settings.AutoSwitchGameProfile = true;
             settings.DualRegionOcr = true;
             settings.Model = settings.LocalAiModel;
@@ -130,7 +133,7 @@ public sealed class SettingsService
     public void Save(AppSettings settings)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-        settings.SettingsSchemaVersion = 23;
+        settings.SettingsSchemaVersion = 24;
         File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
     }
 }

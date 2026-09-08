@@ -1,13 +1,13 @@
 # Paddle OCR 실험 모드 / Experimental Paddle OCR
 
-Windows OCR 기본값은 바뀌지 않습니다. OCR 엔진과 번역 엔진은 별개입니다.
-PaddleOCR-VL은 한·영·일 혼합 채팅을 함께 읽는 선택형 로컬 OCR입니다.
+v0.2.0-beta의 기본 OCR은 PaddleOCR-VL입니다. OCR 엔진과 번역 엔진은 각각 준비해야 합니다.
+기존 Windows OCR 설정도 업데이트 후 첫 실행에서 Paddle로 한 번 전환됩니다. 이후에는 Windows OCR을 직접 선택하고 저장할 수 있습니다. NVIDIA GPU 환경이 맞지 않으면 Windows OCR을 대안으로 선택하세요.
 
 ## 한국어
 
 1. NVIDIA GPU와 최신 드라이버를 준비하세요. 별도 GPU 메모리 약 2GB를 사용하며 게임/번역 모델과 경쟁합니다.
 2. 설치 도구 uv가 없다면 공식 가이드에서 먼저 설치하세요: https://docs.astral.sh/uv/getting-started/installation/
-3. **채팅 대시보드 → OCR 설정 · 진단 → OCR 엔진 · 고정확도 실험**을 열고 **실행 환경 설치**를 누르세요.
+3. **채팅 대시보드 → OCR 설정 · 진단 → OCR 엔진 · 설치와 준비**을 열고 **실행 환경 설치**를 누르세요.
    Python, GPU 라이브러리, 공식 OCR 모델을 별도 폴더에 받습니다. 최초 다운로드는 수 GB이며 충분한 디스크 공간(약 10GB 여유)을 권장합니다.
    관리자 권한·Docker·WSL·API 키는 필요하지 않습니다. 시스템 Python/PATH는 바꾸지 않습니다.
 4. **PaddleOCR-VL**을 선택하고 **로컬 OCR 준비 · 확인**이 완료되는지 확인하세요.
@@ -34,7 +34,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Ocr\Setup.ps1 -RuntimeDire
 
 ## English
 
-Open **OCR settings / diagnostics → OCR engine / experimental accuracy mode** on the chat dashboard. Install **uv** from its official site first if needed.
+PaddleOCR-VL is the default in v0.2.0-beta. Existing Windows OCR settings switch to Paddle once after this update; a later manual Windows selection is preserved after saving. Use Windows OCR as a lighter alternative if needed.
+
+Open **OCR settings / diagnostics → OCR engine / installation and preparation** on the chat dashboard. Install **uv** from its official site first if needed.
 Use the runtime installation button to download a private Python environment, CUDA libraries and the pinned official PaddleOCR-VL model.
 Allow several GB of download and about 10GB free disk space. No administrator privileges, Docker, WSL or API key are required.
 

@@ -14,9 +14,9 @@ public sealed class AppSettings
     public int OverlayDisplaySeconds { get; set; } = 15;
     public double OverlayFontSize { get; set; } = 17;
     public string OcrLanguage { get; set; } = "AUTO";
-    public string OcrEngine { get; set; } = "Windows";
+    public string OcrEngine { get; set; } = "Paddle";
     public string PaddleOcrRuntime { get; set; } = "";
-    public int SettingsSchemaVersion { get; set; } = 23;
+    public int SettingsSchemaVersion { get; set; } = 24;
     public bool ShowStartupGuide { get; set; } = true;
     public bool ShowAdvancedSettings { get; set; }
     public bool AutoSwitchGameProfile { get; set; } = true;

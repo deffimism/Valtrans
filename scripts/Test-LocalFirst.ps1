@@ -7,6 +7,22 @@ $fixtureDirectory = Join-Path $PSScriptRoot ('../artifacts/tests/local-only-' + 
 $fixturePath = Join-Path $fixtureDirectory 'settings.json'
 $settingsStore = [Valtrans.Services.SettingsService]::new($fixturePath)
 Check ($settingsStore.Load().TranslationProvider -eq 'Hybrid') 'Default not local'
+Check ($settingsStore.Load().OcrEngine -eq 'Paddle') 'Fresh OCR default must be Paddle'
+foreach ($schema in @(0,23,24)) {
+    foreach ($choice in @('Windows','Paddle','invalid',$null)) {
+        [IO.File]::WriteAllText($fixturePath, (@{ SettingsSchemaVersion=$schema; OcrEngine=$choice } | ConvertTo-Json))
+        $expectedOcr = if ($schema -ge 24 -and $choice -eq 'Windows') { 'Windows' } else { 'Paddle' }
+        $migrated = $settingsStore.Load()
+        Check ($migrated.OcrEngine -eq $expectedOcr) 'OCR one-time migration failed'
+        Check ($migrated.SettingsSchemaVersion -eq 24) 'OCR migration marker missing'
+        $settingsStore.Save($migrated)
+        Check ($settingsStore.Load().OcrEngine -eq $expectedOcr) 'OCR migration not stable after save'
+        $migrated.OcrEngine = 'Windows'
+        $settingsStore.Save($migrated)
+        Check ($settingsStore.Load().OcrEngine -eq 'Windows') 'Later manual Windows selection lost'
+    }
+}
+Write-Output 'PASS: existing Windows migrates to Paddle once; subsequent manual Windows choice persists'
 foreach ($schema in @(0,21,22,23)) {
     foreach ($provider in @('DeepLX','DeepL','OpenAI','Unknown','Hybrid','Ollama','Lite')) {
         $fixture = @{

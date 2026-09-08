@@ -16,6 +16,22 @@ public sealed class PaddleOcrService : IDisposable
     private readonly string _hostPath;
     public string Status { get; private set; } = "준비 필요 · 별도 GPU 실행 환경";
 
+    public bool IsReady
+    {
+        get { lock (_processGate) return _ready && _process is { HasExited: false }; }
+    }
+
+    public static bool HasRuntimeFiles(string runtime)
+    {
+        try
+        {
+            runtime = string.IsNullOrWhiteSpace(runtime) ? FindRuntime() : runtime;
+            return File.Exists(Path.Combine(runtime, "model.json")) &&
+                   File.Exists(Path.Combine(runtime, ".venv", "Scripts", "python.exe"));
+        }
+        catch { return false; }
+    }
+
     public PaddleOcrService(string? hostPath = null)
         => _hostPath = hostPath ?? Path.Combine(AppContext.BaseDirectory, "Ocr", "paddle_host.py");
 

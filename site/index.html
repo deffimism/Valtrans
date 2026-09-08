@@ -6,13 +6,14 @@
   <title>Valtrans · 게임 채팅 번역</title>
   <meta name="description" content="게임 채팅을 빠르고 자연스럽게 번역하는 Valtrans">
   <link rel="icon" type="image/png" href="/valtrans.png">
-  <link rel="stylesheet" href="/styles.css?v=0.1.1-beta">
-  <link rel="stylesheet" href="/donate.css?v=0.1.1-beta">
+  <link rel="stylesheet" href="/styles.css?v=0.2.0-beta">
+  <link rel="stylesheet" href="/donate.css?v=0.2.0-beta">
+  <link rel="stylesheet" href="/setup.css?v=20260908-1">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/"><img src="/valtrans.png" alt="" width="42" height="42"><span>valtrans</span></a>
-    <nav aria-label="주요 메뉴"><a href="#features">기능</a><a href="#support">후원</a><a href="#community">커뮤니티</a></nav>
+    <nav aria-label="주요 메뉴"><a href="#features">기능</a><a href="#setup">사용법</a><a href="#support">후원</a><a href="#community">커뮤니티</a></nav>
   </header>
 
   <main>
@@ -20,24 +21,37 @@
       <div class="hero-copy">
         <p class="eyebrow">REAL-TIME GAME CHAT TRANSLATOR</p>
         <h1>게임 채팅의<br><em>언어 장벽을 줄이다.</em></h1>
-        <p class="lead">Windows OCR과 가벼운 로컬 번역 엔진으로<br>VALORANT와 FPS 채팅을 플레이 흐름에 맞게 번역합니다.</p>
+        <p class="lead">PaddleOCR-VL과 로컬 AI로<br>VALORANT·Apex Legends의 한·영·일 채팅을 읽고 번역합니다.</p>
         <div class="actions"><a id="download-link" class="button primary" href="https://github.com/deffimism/Valtrans/releases" target="_blank" rel="noreferrer">Valtrans 다운로드 <span>↗</span></a><a class="button" href="#support">프로젝트 후원</a></div>
-        <p class="micro">무료 로컬 번역 · EN / JP / KO · 게임 화면을 가리지 않는 오버레이</p>
+        <p class="micro">v0.2.0-beta · 무료 로컬 번역 · 기본 OCR은 NVIDIA GPU와 별도 설치 필요</p>
       </div>
       <div class="hero-card" aria-label="Valtrans 기능 요약">
         <div class="status"><span></span> READY TO PLAY</div>
         <div class="chat-line"><b>TEAM</b><span>左見て、敵一人</span><strong>왼쪽 봐, 한 명</strong></div>
         <div class="chat-line"><b>PARTY</b><span>nice try nt</span><strong>아깝다</strong></div>
-        <div class="hero-card-footer"><span>OCR</span><span>HYBRID LOCAL</span><span>OVERLAY</span></div>
+        <div class="hero-card-footer"><span>PADDLE OCR</span><span>HYBRID LOCAL</span><span>OVERLAY</span></div>
       </div>
     </section>
 
     <section id="features" class="section">
       <div class="section-heading"><p class="eyebrow">MADE FOR THE MOMENT</p><h2>플레이를 끊지 않는 번역</h2><p>긴 설명 대신, 브리핑에 필요한 표현을 짧고 분명하게 보여줍니다.</p></div>
       <div class="feature-grid">
-        <article><span class="number">01</span><h3>Windows OCR</h3><p>게임 채팅 영역만 읽어 반복 인식과 불필요한 시스템 문구를 줄입니다.</p></article>
+        <article><span class="number">01</span><h3>다국어 OCR</h3><p>PaddleOCR-VL로 혼합 언어 채팅을 읽습니다. 게임 창에 맞춰 영역을 자동 계산하고 중복·시스템 문구를 걸러냅니다.</p></article>
         <article><span class="number">02</span><h3>FPS 표현 최적화</h3><p>nt, mb, mid 같은 약어와 방향·콜아웃을 게임 문맥에 맞춰 처리합니다.</p></article>
-        <article><span class="number">03</span><h3>로컬 우선</h3><p>가능한 번역은 PC에서 처리하고, 외부 API는 선택 사항으로 남겨둡니다.</p></article>
+        <article><span class="number">03</span><h3>로컬 전용</h3><p>Hy-MT2 1.8B와 Lite가 PC에서 번역합니다. 외부 번역 API·키·Docker·WSL은 필요하지 않습니다.</p></article>
+      </div>
+    </section>
+
+    <section id="setup" class="section">
+      <div class="section-heading"><p class="eyebrow">GET STARTED</p><h2>첫 게임 전, 세 가지만</h2><p>앱을 준비하고, 채팅을 읽을 언어를 골라보세요.</p></div>
+      <div class="feature-grid">
+        <article><span class="number">01</span><h3>번역 엔진 준비</h3><p>앱의 시작 가이드에서 권장 엔진을 준비하세요. 설치와 예열이 끝나면 내 PC에서 번역할 수 있습니다.</p></article>
+        <article><span class="number">02</span><h3>채팅 읽기 준비</h3><p>대시보드에서 OCR을 설치하고 읽을 언어를 선택하세요. 채팅 영역은 게임 화면에 맞춰 자동으로 잡힙니다.</p></article>
+        <article><span class="number">03</span><h3>게임에서 번역 시작</h3><p>받는 채팅은 오버레이로 읽고, 보내는 채팅은 단축키로 번역하세요. 결과를 확인한 뒤 Enter로 전송하면 됩니다.</p></article>
+      </div>
+      <div class="setup-footer">
+        <p class="setup-note">기본 OCR은 NVIDIA GPU가 필요합니다. 가볍게 사용하려면 Windows OCR을 선택하세요. 설치 조건과 자세한 사용법은 가이드에서 확인할 수 있습니다.</p>
+        <a class="button" href="https://github.com/deffimism/Valtrans#readme" target="_blank" rel="noreferrer">사용 가이드 <span class="guide-languages">한국어 · English</span> ↗</a>
       </div>
     </section>
 
@@ -58,7 +72,7 @@
     <section id="community" class="community"><div><p class="eyebrow">JOIN THE COMMUNITY</p><h2>사용자와 함께 다듬습니다.</h2><p>버그 제보, 번역 용어 제안, 사용 팁을 공식 Discord에서 공유해주세요.</p></div><a class="button" href="https://discord.gg/GMYuAJ8bZ2" target="_blank" rel="noreferrer">공식 Discord 입장 ↗</a></section>
   </main>
 
-  <footer><span>Valtrans · Game Chat Translator</span><span><a href="/terms">이용약관</a> · <a href="/privacy">개인정보 처리방침</a> · Windows 10/11 · v0.1.1-beta</span></footer>
+  <footer><span>Valtrans · Game Chat Translator</span><span><a href="/terms">이용약관</a> · <a href="/privacy">개인정보 처리방침</a> · Windows 10/11 · v0.2.0-beta</span></footer>
   <script src="/config.js"></script>
   <script src="/site.js"></script>
 </body>

@@ -17,7 +17,17 @@ try {
   const body = await response.json();
   if (response.status !== 200 || !body.test) throw new Error(`test webhook failed: ${response.status} ${JSON.stringify(body)}`);
   const root = await fetch(`http://127.0.0.1:${port}/`);
-  if (!root.ok || !(await root.text()).includes('Valtrans')) throw new Error('static site failed');
+  const rootText = await root.text();
+  if (!root.ok || !rootText.includes('Valtrans')) throw new Error('static site failed');
+  for (const required of ['PaddleOCR-VL', 'NVIDIA GPU', '로컬 전용', 'id="setup"', 'v0.2.0-beta']) {
+    if (!rootText.includes(required)) throw new Error(`site product information missing: ${required}`);
+  }
+  if (rootText.includes('외부 API는 선택 사항') || rootText.includes('v0.1.1-beta')) throw new Error('stale site information');
+  const setup = rootText.match(/<section id="setup"[\s\S]*?<\/section>/)?.[0] || '';
+  if (!setup.includes('첫 게임 전, 세 가지만') || !setup.includes('class="setup-note"')) throw new Error('setup copy/layout missing');
+  if (/한 번 전환|uv 준비|class="lead"/.test(setup)) throw new Error('technical release notes leaked into setup copy');
+  const setupCss = await fetch(`http://127.0.0.1:${port}/setup.css`);
+  if (!setupCss.ok || !(await setupCss.text()).includes('word-break: keep-all')) throw new Error('setup stylesheet missing');
   const config = await fetch(`http://127.0.0.1:${port}/config.js`);
   if (!config.ok || !(await config.text()).includes('fairySupportUrl')) throw new Error('runtime config failed');
   const terms = await fetch(`http://127.0.0.1:${port}/terms`);

@@ -182,13 +182,13 @@
                              Foreground="#586A82" FontSize="12" TextWrapping="Wrap" Margin="0,9,0,0"/>
                 </StackPanel>
               </Expander>
-                <Expander x:Name="OcrEnginePanel" Header="OCR 엔진 · 고정확도 실험" Margin="0,0,0,12">
+                <Expander x:Name="OcrEnginePanel" Header="OCR 엔진 · 설치와 준비" Margin="0,0,0,12">
                   <StackPanel Margin="2,8,2,0">
                     <ComboBox x:Name="OcrEngineCombo" SelectionChanged="OcrEngine_OnChanged">
-                      <ComboBoxItem Tag="Windows"><TextBlock Style="{StaticResource ComboText}" Text="Windows OCR · 가벼운 기본값"/></ComboBoxItem>
-                      <ComboBoxItem Tag="Paddle"><TextBlock Style="{StaticResource ComboText}" Text="PaddleOCR-VL · 다국어 고정확도 · 실험"/></ComboBoxItem>
+                      <ComboBoxItem Tag="Windows"><TextBlock Style="{StaticResource ComboText}" Text="Windows OCR · 가벼운 대안"/></ComboBoxItem>
+                      <ComboBoxItem Tag="Paddle"><TextBlock Style="{StaticResource ComboText}" Text="PaddleOCR-VL · 다국어 · 기본값 · GPU"/></ComboBoxItem>
                     </ComboBox>
-                    <TextBlock x:Name="PaddleOcrStatusText" Text="Windows OCR 사용 중" Foreground="#18243B" TextWrapping="Wrap" Margin="0,8,0,6"/>
+                    <TextBlock x:Name="PaddleOcrStatusText" Text="PaddleOCR-VL 설치·준비 필요" Foreground="#18243B" TextWrapping="Wrap" Margin="0,8,0,6"/>
                     <WrapPanel>
                       <Button x:Name="InstallPaddleOcrButton" Content="실행 환경 설치" Click="InstallPaddleOcr_OnClick" Padding="9,4" FontSize="12" Margin="0,0,6,6"/>
                       <Button x:Name="PreparePaddleOcrButton" Content="로컬 OCR 준비 · 확인" Click="PreparePaddleOcr_OnClick" Padding="9,4" FontSize="12" Margin="0,0,6,6"/>
@@ -196,7 +196,7 @@
                       <Button Content="취소 · 메모리 해제" Click="ReleasePaddleOcr_OnClick" Padding="9,4" FontSize="12" Margin="0,0,6,6"/>
                       <Button Content="설치 가이드" Click="PaddleGuide_OnClick" Padding="9,4" FontSize="12" Margin="0,0,0,6"/>
                     </WrapPanel>
-                    <TextBlock Text="Paddle: 전체 채팅을 한·영·일 함께 읽습니다. 별도 설치·GPU 메모리 약 2GB가 필요하며 수 초 지연될 수 있습니다. OCR 중지 시 모델을 해제합니다. 이 모드는 이중 영역·두 프레임 검사를 사용하지 않습니다." Foreground="#586A82" FontSize="12" TextWrapping="Wrap"/>
+                    <TextBlock Text="기본 PaddleOCR-VL: NVIDIA GPU와 uv가 필요합니다. 전체 채팅을 한·영·일 함께 읽습니다. 별도 설치·GPU 메모리 약 2GB가 필요하며 수 초 지연될 수 있습니다. OCR 중지 시 모델을 해제합니다. 이 모드는 이중 영역·두 프레임 검사를 사용하지 않습니다." Foreground="#586A82" FontSize="12" TextWrapping="Wrap"/>
                   </StackPanel>
                 </Expander>
               <Expander Header="OCR 처리 상세" Margin="0,0,0,10">
@@ -500,7 +500,7 @@
                   <TextBlock Text="4 · 실행" Foreground="#4F46E5" FontSize="12" FontWeight="SemiBold"/>
                   <TextBlock Text="단축키 · OCR" FontSize="13" FontWeight="Bold" Margin="0,5,0,0"/>
                   <TextBlock Text="채팅은 \ · 수신은 OCR 시작" Foreground="#586A82" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap"/>
-                  <TextBlock x:Name="GuideLanguageStateText" Text="언어팩 확인 중" Foreground="#9A5B0A" FontSize="12" Margin="0,9,0,0" TextWrapping="Wrap"/>
+                  <TextBlock x:Name="GuideLanguageStateText" Text="OCR 준비 확인 중" Foreground="#9A5B0A" FontSize="12" Margin="0,9,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
               </Border>
             </Grid>
