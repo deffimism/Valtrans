@@ -23,6 +23,8 @@ public partial class MainWindow : System.Windows.Window
     private readonly KeyboardReplacementService _keyboard = new();
     private readonly WindowsOcrService _ocr = new();
     private readonly PaddleOcrService _paddleOcr = new();
+    private string _paddleSetupIssue = "";
+    private bool _paddleSetupBusy;
     private readonly CancellationTokenSource _windowLifetime = new();
     private CancellationTokenSource? _paddleOperation;
     private readonly LanguagePackService _languagePacks = new();
@@ -191,7 +193,7 @@ public partial class MainWindow : System.Windows.Window
                 {
                     lines.Add(PaddleOcrService.HasRuntimeFiles(_settings.PaddleOcrRuntime)
                         ? "△ PaddleOCR-VL 실행 환경 있음 · 로컬 OCR 준비 · 확인을 눌러 주세요"
-                        : "✕ PaddleOCR-VL 실행 환경 설치 필요 · OCR 설정 · 진단에서 준비하세요");
+                        : "✕ PaddleOCR-VL 실행 환경 설치 필요 · 시작 가이드의 OCR 설치 · 준비를 누르세요");
                     blocking++;
                 }
             }
@@ -268,7 +270,7 @@ public partial class MainWindow : System.Windows.Window
                 ? "✓ PaddleOCR-VL · 전체 다국어 인식, Windows 보정·두 프레임 합의 미사용"
                 : _settings.OcrAutoEnhance && _settings.OcrTwoFrameConsensus
                 ? "✓ OCR 품질 보호 · 자동 확대·대비 보정 + 두 프레임 합의"
-                : "△ OCR 품질 보호 일부 꺼짐 · OCR 설정 · 진단에서 옵션 확인");
+                : "△ OCR 품질 보호 일부 꺼짐 · 세부 설정 · 진단에서 옵션 확인");
 
             var regression = _regressionTests.Run(_settings);
             if (regression.Success)
@@ -595,7 +597,7 @@ public partial class MainWindow : System.Windows.Window
 
     private async void PrepareRecommendedSetup_OnClick(object sender, RoutedEventArgs e)
     {
-        if (_recommendedSetupBusy) return;
+        if (_recommendedSetupBusy || _paddleSetupBusy || _paddleOperation is not null || _ocrCancellation is not null) return;
         _recommendedSetupBusy = true;
         RecommendedPrepareButton.IsEnabled = false;
         RefreshGuideButton.IsEnabled = false;
@@ -614,7 +616,7 @@ public partial class MainWindow : System.Windows.Window
                 var liteProgress = new Progress<LiteProgress>(update =>
                 {
                     LiteInstallProgress.Value = update.Percent;
-                    GuideNextActionText.Text = $"1/2 · Valtrans Lite 준비 중 · {update.Message}";
+                    GuideNextActionText.Text = $"1/3 · Valtrans Lite 준비 중 · {update.Message}";
                     SetLiteStatus(update.Message, false);
                     SetStatus("권장 구성 준비 중", update.Message);
                 });
@@ -630,7 +632,7 @@ public partial class MainWindow : System.Windows.Window
                 var localProgress = new Progress<LocalAiProgress>(update =>
                 {
                     LocalInstallProgress.Value = update.Percent;
-                    GuideNextActionText.Text = $"2/2 · Hy-MT2 준비 중 · {update.Message}";
+                    GuideNextActionText.Text = $"2/3 · Hy-MT2 준비 중 · {update.Message}";
                     SetLocalStatus(update.Message, false);
                     SetStatus("권장 구성 준비 중", update.Message);
                 });
@@ -641,11 +643,14 @@ public partial class MainWindow : System.Windows.Window
 
             if (localReady)
                 localReady = await WarmUpLocalAiAsync(showGlobalStatus: false);
+            GuideNextActionText.Text = "3/3 · PaddleOCR-VL 설치·준비 중";
+            var ocrReady = await PreparePaddleSetupAsync();
             _settingsService.Save(_settings);
-            SetStatus(liteReady && localReady ? "권장 엔진 준비 완료" : "일부 엔진 준비됨",
-                liteReady && localReady
-                    ? "Valtrans Lite와 Hy-MT2가 모두 준비됐습니다. 이제 OCR 영역을 설정하세요."
-                    : "준비되지 않은 엔진은 번역 엔진 카드에서 안내를 확인해 주세요.",
+            SetStatus(liteReady && localReady && ocrReady ? "권장 엔진 준비 완료" : "일부 엔진 준비됨",
+                liteReady && localReady && ocrReady
+                    ? "번역과 Paddle OCR 준비 완료 · 게임 실행 후 OCR 시작을 누르세요."
+                    : !ocrReady ? $"OCR 준비 필요 · {_paddleSetupIssue}"
+                    : "준비되지 않은 번역 엔진의 안내를 확인해 주세요.",
                 !liteReady && !localReady);
         }
         catch (Exception ex)
@@ -667,7 +672,7 @@ public partial class MainWindow : System.Windows.Window
 
     private async Task RefreshQuickStartGuideAsync()
     {
-        if (_guideRefreshBusy || GuideNextActionText is null) return;
+        if (_guideRefreshBusy || _paddleSetupBusy || _recommendedSetupBusy || GuideNextActionText is null) return;
         _guideRefreshBusy = true;
         RefreshGuideButton.IsEnabled = false;
         try
@@ -701,20 +706,25 @@ public partial class MainWindow : System.Windows.Window
                 : ocrReady ? $"✓ {string.Join("/", selectedLanguages)} 언어팩 준비됨"
                 : $"설치 필요 · {string.Join("/", missingLanguages)}", ocrReady);
 
-            GuideNextActionText.Text = !providerRecommended
+            GuideNextActionText.Text = paddle && !ocrReady && !string.IsNullOrEmpty(_paddleSetupIssue)
+                ? _paddleSetupIssue
+                : !providerRecommended
                 ? "‘권장값 적용’을 눌러 스마트 복합 구성을 선택하세요."
                 : !liteReady || !localReady
-                    ? "‘권장 엔진 준비’로 Lite와 Hy-MT2를 준비한 뒤 OCR을 별도로 준비하세요."
+                    ? "‘권장 엔진 준비’로 Lite · Hy-MT2 · Paddle OCR을 차례대로 준비하세요."
                     : !ocrReady
                         ? paddle
-                            ? "대시보드 → OCR 설정 · 진단 → OCR 엔진에서 ‘실행 환경 설치’ 후 ‘로컬 OCR 준비 · 확인’을 누르세요. NVIDIA GPU와 uv가 필요합니다."
+                            ? !string.IsNullOrEmpty(_paddleSetupIssue) ? _paddleSetupIssue
+                                : "아래 ‘OCR 설치 · 준비’를 눌러 Paddle을 준비하세요. 필요한 설치 도구도 함께 받습니다."
                             : $"받는 채팅의 ‘언어팩’으로 {string.Join("/", missingLanguages)} OCR 기능을 설치하세요."
                         : !regionReady
                             ? "게임 실행 후 ‘추천 영역 새로고침’과 OCR 테스트로 범위를 확인하세요."
                             : "준비 완료 · 보내기는 단축키, 받기는 ‘OCR 시작’을 사용하세요.";
 
-            RecommendedPrepareButton.Content = liteReady && localReady ? "권장 엔진 준비됨" : "권장 엔진 준비";
-            RecommendedPrepareButton.IsEnabled = !_recommendedSetupBusy && (!liteReady || !localReady);
+            RecommendedPrepareButton.Content = liteReady && localReady && ocrReady ? "권장 엔진 준비됨" : "권장 엔진 준비";
+            RecommendedPrepareButton.IsEnabled = !_recommendedSetupBusy && !_paddleSetupBusy && (!liteReady || !localReady || !ocrReady);
+            GuideOcrPrepareButton.IsEnabled = !_recommendedSetupBusy && !_paddleSetupBusy && _paddleOperation is null;
+            GuideOcrPrepareButton.Content = paddle ? (ocrReady ? "OCR 준비 확인" : "OCR 설치 · 준비") : "언어팩 설치";
             var engineNeedsRepair = provider switch
             {
                 "Hybrid" => !liteReady || !localReady,
@@ -1546,7 +1556,7 @@ public partial class MainWindow : System.Windows.Window
         if (_ocrCancellation is not null) StopOcr();
         _paddleOcr.Stop();
         _settings.OcrEngine = GetTag(OcrEngineCombo, "Paddle");
-        PaddleOcrStatusText.Text = _settings.OcrEngine == "Paddle" ? "준비 필요 · 실행 환경 설치 후 로컬 OCR 준비 버튼을 눌러 주세요" : "Windows OCR 사용 중";
+        PaddleOcrStatusText.Text = _settings.OcrEngine == "Paddle" ? "OCR 준비를 누르면 설치부터 모델 준비까지 진행합니다" : "Windows OCR 사용 중";
         RefreshLanguagePackStatus();
         _ = RefreshQuickStartGuideAsync();
         _settingsService.Save(_settings);
@@ -1574,30 +1584,73 @@ public partial class MainWindow : System.Windows.Window
         else SetStatus("가이드 파일 없음", "전체 배포 파일을 다시 풀어 주세요.", true);
     }
 
-    private async void PreparePaddleOcr_OnClick(object sender, RoutedEventArgs e) => await PreparePaddleOcrAsync();
+    private async void PreparePaddleOcr_OnClick(object sender, RoutedEventArgs e) => await PreparePaddleSetupAsync();
 
-    private async void InstallPaddleOcr_OnClick(object sender, RoutedEventArgs e)
+    private async void GuideOcrPrepare_OnClick(object sender, RoutedEventArgs e)
     {
-        if (_paddleOperation is not null || _ocrCancellation is not null) return;
-        if (MessageBox.Show(this, "별도 OCR 환경을 설치합니다. 최초 다운로드는 수 GB이며 약 10GB의 디스크 여유를 권장합니다.\n설치 도구 uv가 필요합니다. 기존 번역 모델이나 시스템 Python은 변경하지 않습니다.\n진행할까요?",
-            "Paddle OCR 환경 설치", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes) return;
+        if (_recommendedSetupBusy || _paddleSetupBusy) return;
+        if (_settings.OcrEngine == "Windows") await EnsureLanguagePackAsync();
+        else await PreparePaddleSetupAsync();
+        await RefreshQuickStartGuideAsync();
+    }
+
+    private async void InstallPaddleOcr_OnClick(object sender, RoutedEventArgs e) => await PreparePaddleSetupAsync(forceInstall: true);
+
+    private async Task<bool> PreparePaddleSetupAsync(bool forceInstall = false)
+    {
+        if (_paddleSetupBusy || _paddleOperation is not null || _ocrCancellation is not null) return false;
+        _paddleSetupBusy = true;
+        _paddleSetupIssue = "";
+        GuideOcrPrepareButton.IsEnabled = false;
+        try
+        {
+            if (forceInstall || !PaddleOcrService.HasRuntimeFiles(_settings.PaddleOcrRuntime))
+                if (!await InstallPaddleEnvironmentAsync()) return false;
+            return await PreparePaddleOcrAsync();
+        }
+        finally
+        {
+            _paddleSetupBusy = false;
+            GuideOcrPrepareButton.IsEnabled = true;
+            await RefreshQuickStartGuideAsync();
+        }
+    }
+
+    private void ShowPaddleSetupStatus(string message, bool failed = false)
+    {
+        PaddleOcrStatusText.Text = message;
+        GuideLanguageStateText.Text = message;
+        if (_paddleSetupBusy || _recommendedSetupBusy) GuideNextActionText.Text = message;
+        if (failed) _paddleSetupIssue = message;
+    }
+
+    private async Task<bool> InstallPaddleEnvironmentAsync()
+    {
+        if (_paddleOperation is not null || _ocrCancellation is not null) return false;
+        if (MessageBox.Show(this, "별도 OCR 환경을 설치합니다. 최초 다운로드는 수 GB이며 약 10GB의 디스크 여유를 권장합니다.\nNVIDIA GPU가 필요합니다. uv가 없으면 공식 설치 도구도 앱 전용 폴더에 받습니다. 시스템 Python과 PATH는 변경하지 않습니다.\n진행할까요?",
+            "Paddle OCR 환경 설치", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes)
+        {
+            ShowPaddleSetupStatus("OCR 설치를 취소했습니다. ‘OCR 설치 · 준비’로 다시 시작할 수 있습니다.", true);
+            return false;
+        }
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(_windowLifetime.Token);
         _paddleOperation = operation;
         InstallPaddleOcrButton.IsEnabled = false;
         PreparePaddleOcrButton.IsEnabled = false;
-        PaddleOcrStatusText.Text = "설치 시작 · 취소 버튼으로 중단할 수 있습니다";
+        ShowPaddleSetupStatus("설치 시작 · 취소 버튼으로 중단할 수 있습니다");
         try
         {
             var progress = new Progress<string>(message =>
             {
                 if (ReferenceEquals(_paddleOperation, operation) && !operation.IsCancellationRequested)
-                    PaddleOcrStatusText.Text = message;
+                    ShowPaddleSetupStatus(message);
             });
             await _paddleOcr.InstallAsync(_settings.PaddleOcrRuntime, progress, operation.Token);
-            PaddleOcrStatusText.Text = _paddleOcr.Status;
+            ShowPaddleSetupStatus(_paddleOcr.Status);
+            return true;
         }
-        catch (OperationCanceledException) { PaddleOcrStatusText.Text = "설치 취소됨 · 다시 설치하면 이어서 준비합니다"; }
-        catch (Exception ex) { PaddleOcrStatusText.Text = "설치 실패 · " + ex.Message; }
+        catch (OperationCanceledException) { ShowPaddleSetupStatus("설치 취소됨 · 다시 준비를 누르세요.", true); return false; }
+        catch (Exception ex) { ShowPaddleSetupStatus("설치 실패 · " + ex.Message, true); return false; }
         finally
         {
             _paddleOperation = null;
@@ -1621,18 +1674,18 @@ public partial class MainWindow : System.Windows.Window
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(_windowLifetime.Token);
         _paddleOperation = operation;
         PreparePaddleOcrButton.IsEnabled = false;
-        PaddleOcrStatusText.Text = "준비 중 · GPU에 OCR 모델을 적재하고 있습니다…";
+        ShowPaddleSetupStatus("OCR 준비 중 · GPU에 모델을 적재하고 있습니다…");
         try
         {
             await _paddleOcr.PrepareAsync(_settings.PaddleOcrRuntime, operation.Token);
             operation.Token.ThrowIfCancellationRequested();
-            PaddleOcrStatusText.Text = _paddleOcr.Status;
+            ShowPaddleSetupStatus(_paddleOcr.Status);
             return true;
         }
-        catch (OperationCanceledException) { return false; }
+        catch (OperationCanceledException) { ShowPaddleSetupStatus("OCR 준비 취소됨 · 다시 준비를 누르세요.", true); return false; }
         catch (Exception ex)
         {
-            PaddleOcrStatusText.Text = "준비 실패 · " + ex.Message;
+            ShowPaddleSetupStatus("준비 실패 · " + ex.Message, true);
             return false;
         }
         finally
@@ -1777,6 +1830,7 @@ public partial class MainWindow : System.Windows.Window
 
     private void RefreshLanguagePackStatus()
     {
+        PaddleQuickActions.Visibility = _settings.OcrEngine == "Paddle" ? Visibility.Visible : Visibility.Collapsed;
         if (_settings.OcrEngine == "Paddle")
         {
             LanguagePackStatusText.Text = "Paddle · Windows 언어팩 불필요";

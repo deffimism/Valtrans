@@ -59,7 +59,7 @@ $ns.AddNamespace('x','http://schemas.microsoft.com/winfx/2006/xaml')
 $choices = $xml.SelectNodes('//w:ComboBox[@x:Name="TranslationProviderCombo"]/w:ComboBoxItem',$ns)
 Check ($choices.Count -eq 3 -and @($choices.Tag | Where-Object { $_ -notin @('Hybrid','Lite','Ollama') }).Count -eq 0) 'Nonlocal provider UI'
 Check ($xml.SelectNodes('//w:PasswordBox',$ns).Count -eq 0) 'API key input remains'
-foreach ($name in @('OcrChatFilterCombo','OcrStabilityCombo','OcrAutoEnhanceCheck','OcrConsensusCheck','OcrEngineCombo')) {
+foreach ($name in @('OcrChatFilterCombo','OcrStabilityCombo','OcrAutoEnhanceCheck','OcrConsensusCheck')) {
     Check ($null -ne $xml.SelectSingleNode("//w:Expander[@x:Name='OcrDetailsPanel']//*[@x:Name='$name']",$ns)) "Scattered OCR option: $name"
 }
 Check ($xml.OuterXml -notmatch 'MapCombo|SelectRegion_OnClick|CalibrateOcr_OnClick|SelectLatestOcrRegion|DeepLxPanel|SimpleEnginePanel') 'Retired control remains'
@@ -123,3 +123,10 @@ try {
     Check ($prompt.Contains('Jett') -and -not $prompt.Contains('Map:')) 'Map context or missing name'
 } finally { $lite.Dispose(); $client.Dispose(); $oldClient.Dispose() }
 Write-Output 'PASS: loopback-only send/receive protocols, retired provider rejection, shared proper-name dictionary'
+
+foreach ($name in @('OcrEngineCombo','InstallPaddleOcrButton','PreparePaddleOcrButton','PaddleOcrStatusText')) {
+    $control = $xml.SelectSingleNode("//*[@x:Name='$name']",$ns)
+    Check ($null -ne $control -and $null -eq $control.SelectSingleNode('ancestor::w:Expander',$ns)) "Primary OCR control hidden: $name"
+}
+Check ($null -ne $xml.SelectSingleNode("//w:Button[@x:Name='GuideOcrPrepareButton']",$ns)) 'Guide OCR setup action missing'
+Write-Output 'PASS: visible OCR preparation; guide setup action; advanced-only expanders'

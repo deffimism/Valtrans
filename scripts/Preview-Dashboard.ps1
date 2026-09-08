@@ -37,14 +37,14 @@ $window.FindName('HotkeyBox').Text = '\'
 [xml]$project = Get-Content -LiteralPath "$root/Valtrans.csproj" -Raw
 $window.FindName('VersionText').Text = 'Valtrans ' + $project.Project.PropertyGroup.Version
 $window.FindName('LanguagePackStatusText').Text = 'EN ✓  JP ✓  KO ✓'
-$window.FindName('GuideNextActionText').Text = '번역 엔진을 준비한 뒤 게임 채팅 영역을 선택하세요.'
+$window.FindName('GuideNextActionText').Text = '권장 엔진 준비로 번역과 Paddle OCR을 함께 준비하세요.'
 foreach ($name in @('SendTargetCombo','GameCombo','OverlayTargetCombo','TranslationProviderCombo','LocalModelCombo','TestModeCombo','TestTargetCombo','OverlayDurationCombo','OcrChatFilterCombo','OcrStabilityCombo')) {
     $window.FindName($name).SelectedIndex = 0
 }
 foreach ($name in @('OcrEnCheck','OcrJpCheck','OcrKoCheck')) { $window.FindName($name).IsChecked = $true }
 $window.FindName('OcrKoCheck').IsChecked = $false
 $window.FindName('OcrEngineCombo').SelectedIndex = if ($ExpandOcr) { 1 } else { 0 }
-$window.FindName('OcrEnginePanel').IsExpanded = [bool]$ExpandOcr
+$window.FindName('OcrEngineCombo').SelectedIndex = 0
 $window.FindName('OcrDetailsPanel').IsExpanded = [bool]$ExpandOcr
 if ($ExpandOcr) { $window.FindName('PaddleOcrStatusText').Text = '준비 필요 · 별도 GPU 실행 환경' }
 $pages = @('Overview','Engines','Overlay','Lab','Guide')

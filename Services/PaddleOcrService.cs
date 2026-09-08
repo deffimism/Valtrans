@@ -95,13 +95,13 @@ public sealed class PaddleOcrService : IDisposable
                 {
                     string details;
                     lock (errors) details = errors.ToString();
-                    throw new InvalidOperationException(details.Contains("uv is required", StringComparison.Ordinal)
-                        ? "설치 도구 uv가 없습니다. 설치 가이드에서 uv를 먼저 설치한 뒤 다시 시도하세요."
+                    throw new InvalidOperationException(details.Contains("uv installation failed", StringComparison.Ordinal)
+                        ? "설치 도구 다운로드 실패 · 네트워크를 확인하고 OCR 설치를 다시 눌러 주세요."
                         : "OCR 환경 설치 실패 · 설치 가이드의 명령으로 상세 오류를 확인하세요.");
                 }
             }
             finally { Stop(); }
-            Status = "설치 완료 · 로컬 OCR 준비 버튼을 눌러 주세요";
+            Status = "설치 완료 · OCR 모델을 준비합니다";
         }
         finally { _gate.Release(); }
     }
@@ -115,7 +115,7 @@ public sealed class PaddleOcrService : IDisposable
         var python = Path.Combine(runtime, ".venv", "Scripts", "python.exe");
         var host = _hostPath;
         if (!File.Exists(python) || !File.Exists(Path.Combine(runtime, "model.json")))
-            throw new InvalidOperationException("Paddle OCR 실행 환경이 없습니다. 설치 가이드로 별도 환경을 준비한 뒤 해당 폴더를 선택하세요.");
+            throw new InvalidOperationException("Paddle OCR 설치가 필요합니다. 시작 가이드의 ‘OCR 설치 · 준비’를 누르세요.");
         if (!File.Exists(host)) throw new FileNotFoundException("OCR 실행 스크립트가 배포 파일에 없습니다.", host);
         var info = new ProcessStartInfo(python)
         {

@@ -6,7 +6,7 @@ Windows 게임 채팅 번역 · Local game chat translation for Windows
 
 [한국어 사용법](#korean) · [English guide](#english)
 
-> **작성 기준 버전 / Documentation baseline: v0.2.0-beta**<br>
+> **작성 기준 버전 / Documentation baseline: v0.2.1-beta**<br>
 > **검토일 / Reviewed: 2026-09-08**<br>
 > 현재 화면과 사용 흐름을 기준으로 작성했습니다. 사용법이 변하지 않으면 앱 버전이 올라가도 README는 업데이트되지 않을 수 있습니다.<br>
 > This guide describes the interface and workflow at the version above. It may remain unchanged across releases when the usage instructions still apply.
@@ -31,9 +31,9 @@ OCR은 **화면을 글자로 읽는 단계**, 번역 엔진은 **그 글자를 �
 1. [GitHub Releases](https://github.com/deffimism/Valtrans/releases)에서 배포 ZIP을 받아 **압축을 모두 풉니다**.
 2. 폴더 안의 `Valtrans.exe`를 실행합니다. EXE만 따로 옮기지 말고 DLL과 `Ocr` 폴더 등 동봉 파일을 함께 유지하세요.
 3. .NET 실행 환경이 필요하다는 안내가 나오면 **.NET 10 Desktop Runtime**을 설치합니다.
-4. 왼쪽 **시작 가이드 · 점검**에서 **권장 엔진 준비**를 누릅니다. 최초 설치·모델 다운로드에는 인터넷이 필요합니다.
+4. 왼쪽 **시작 가이드 · 점검**에서 **권장 엔진 준비**를 누릅니다. Lite → Hy-MT2 → Paddle OCR 순서로 준비합니다. 최초 설치·모델 다운로드에는 인터넷이 필요합니다.
 5. **번역 엔진**에서 설치 진행과 **예열 완료** 상태를 확인합니다. 처음 준비할 때는 시간이 걸릴 수 있습니다.
-6. **채팅 대시보드 → OCR 설정 · 진단 → OCR 엔진 · 설치와 준비**에서 기본 PaddleOCR-VL을 준비합니다. [OCR 설치 가이드](Ocr/README.md)에 따라 uv 설치 → **실행 환경 설치** → **로컬 OCR 준비 · 확인** 순서로 진행하세요. NVIDIA GPU와 별도 모델 다운로드가 필요합니다. GPU 환경이 맞지 않으면 Windows OCR을 선택하고 **언어팩**을 설치하세요.
+6. Paddle 설치 안내가 나오면 용량·GPU 조건을 확인하고 승인합니다. 필요한 uv·Python·라이브러리·OCR 모델을 자동 설치한 뒤 모델을 준비합니다. OCR만 준비하려면 같은 시작 가이드의 **OCR 설치 · 준비**를 누르세요. NVIDIA GPU 환경이 맞지 않으면 대시보드에서 Windows OCR을 선택하고 언어팩을 설치하세요.
 7. 아래 사용법에 따라 언어를 정하고 상단 **설정 저장**을 누릅니다.
 
 기본 사용에는 Windows 10/11과 .NET 10 Desktop Runtime이 필요합니다. 로컬 AI는 Ollama와 모델이 필요하며 앱에서 설치를 진행할 수 있습니다. **API 키·Docker·WSL은 필요하지 않습니다.**
@@ -65,7 +65,7 @@ OCR은 **화면을 글자로 읽는 단계**, 번역 엔진은 **그 글자를 �
 | 번역 테스트 · 사전 | 텍스트 번역 시험, 호환성 검사, 팀 전용 사전 |
 | 시작 가이드 · 점검 | 권장 구성 준비, 전체 점검, 자동 복구, 진단 저장 |
 
-OCR 관련 세부 옵션은 **채팅 대시보드 → OCR 설정 · 진단**에 모여 있습니다. 오버레이 설정 메뉴에서 찾지 않아도 됩니다.
+OCR 선택·상태·**OCR 설치 / OCR 준비** 버튼은 **채팅 대시보드 → 받는 채팅 · OCR**에 항상 표시됩니다. 필터·안정화·실행 환경 폴더만 **세부 설정 · 진단**에 있습니다.
 
 ### 3. 내가 보내는 채팅 번역하기
 
@@ -108,14 +108,14 @@ VALORANT의 16:9 추천 범위는 게임 화면 기준 **가로 1.25~24%, 세로
 
 닉네임·채널 표시는 본문과 분리합니다. **내가 보낸 메시지라는 이유만으로 제외하지 않습니다.** 자신의 일본어 메시지로도 시험할 수 있지만 같은 문장을 반복하면 중복으로 걸러질 수 있습니다.
 
-`hello` 같은 인사말로 시험하려면 **OCR 설정 · 진단 → 채팅 필터 · OCR 세부 조정 → 잡담도 번역**을 선택하고, 이전과 다른 새 문장을 보내세요.
+`hello` 같은 인사말로 시험하려면 **세부 설정 · 진단 → 잡담도 번역**을 선택하고, 이전과 다른 새 문장을 보내세요.
 
 #### OCR 세부 조정
 
-**채팅 대시보드 → OCR 설정 · 진단**을 펼칩니다.
+설치·준비에는 메뉴를 펼칠 필요가 없습니다. 부가 옵션은 **채팅 대시보드 → 세부 설정 · 진단**을 펼칩니다.
 
 - **채팅 필터 · OCR 세부 조정:** 잡담 포함 여부, 안정화, 작은 글자 자동 확대·대비 보정, 두 프레임 합의.
-- **OCR 엔진 · 설치와 준비:** 기본 PaddleOCR-VL / 대안 Windows OCR 선택과 별도 환경 준비.
+- OCR 엔진 선택·설치·준비는 받는 채팅 카드에 바로 표시됩니다.
 - **OCR 처리 상세:** 인식·생략·대기·번역 상태를 확인합니다.
 
 대안인 Windows OCR은 최신 부분과 전체 영역을 자동으로 확인합니다. 변화가 없는 화면은 반복 처리를 줄입니다. 두 영역을 직접 설정하거나 맵을 선택할 필요는 없습니다.
@@ -160,9 +160,9 @@ VALORANT의 16:9 추천 범위는 게임 화면 기준 **가로 1.25~24%, 세로
 
 혼합 언어를 함께 읽는 **기본 OCR 엔진**입니다. 첫 사용 전에 별도 실행 환경과 모델을 준비해야 합니다. 기본값이지만 실험적 기능이며 인식 품질·지연에는 한계가 있습니다.
 
-1. **OCR 설정 · 진단 → OCR 엔진 · 설치와 준비**을 엽니다.
-2. [별도 설치 가이드](Ocr/README.md)에 따라 `uv`를 준비하고 **실행 환경 설치**를 누릅니다.
-3. PaddleOCR-VL을 선택한 뒤 **로컬 OCR 준비 · 확인**을 누릅니다.
+1. **시작 가이드 · 점검 → OCR 설치 · 준비**를 누릅니다. **권장 엔진 준비**에서도 이 과정이 자동으로 이어집니다.
+2. 설치 안내를 승인하면 필요한 도구·모델을 자동으로 받습니다. 진행과 오류는 같은 가이드에 표시됩니다.
+3. 설치가 끝나면 자동으로 OCR 모델을 준비합니다. 이미 설치되어 있으면 다운로드 없이 준비를 시도합니다. 대시보드의 **OCR 설치**로 설치를 다시 실행하거나 **OCR 준비**로 이어갈 수 있습니다.
 4. **OCR 테스트**로 결과를 비교한 뒤 OCR을 시작합니다.
 
 현재 설치 경로는 NVIDIA GPU용입니다. 다운로드 수 GB, 디스크 여유 약 10GB를 권장하며, 실측 환경에서는 추가 GPU 메모리 약 2GB와 수 초의 인식 시간이 필요했습니다. PC·게임 부하에 따라 달라집니다. Windows 언어팩은 필요하지 않지만 원문 언어 선택은 여전히 번역 필터에 적용됩니다.
@@ -202,7 +202,7 @@ VALORANT의 16:9 추천 범위는 게임 화면 기준 **가로 1.25~24%, 세로
 | 오버레이를 못 옮김 | 오버레이 설정 → 오버레이 위치 · 크기 조정 |
 | 지연·게임 프레임 저하 | 1.8B 모델·가벼운 대안 Windows OCR로 비교, 불필요한 OCR 중지 |
 | Lite 번역 확인 필요 | 의심 결과를 보류한 상태. 기본 복합 모드나 AI로 비교하고 숫자·방향·부정 확인 |
-| Paddle 설치 실패 | uv·NVIDIA 환경·디스크 여유 확인 → 별도 OCR 설치 가이드 |
+| Paddle 설치 실패 | 시작 가이드의 오류 확인 → 네트워크·NVIDIA 환경·디스크 여유 확인 → OCR 설치 · 준비 재시도 |
 
 해결되지 않으면 **시작 가이드 · 점검 → 전체 점검**을 실행하고 필요한 경우 **진단 저장**을 사용하세요. 공유 전에는 저장된 파일에 공개하고 싶지 않은 내용이 없는지 확인해 주세요.
 
@@ -243,9 +243,9 @@ The interface currently uses Korean labels. The labels below match the app; this
 1. Download the ZIP from [GitHub Releases](https://github.com/deffimism/Valtrans/releases) and **extract everything**.
 2. Run `Valtrans.exe`. Keep the DLLs, `Ocr` folder and other bundled files beside it.
 3. Install the **.NET 10 Desktop Runtime** if prompted. Windows 10/11 is required.
-4. Open **시작 가이드 · 점검** (Getting started / diagnostics) and click **권장 엔진 준비** (Prepare recommended engines).
+4. Open **시작 가이드 · 점검** and click **권장 엔진 준비**. Setup proceeds through Lite, Hy-MT2 and Paddle OCR.
 5. Wait for installation, model downloads and **예열 완료** (Warm-up complete) in **번역 엔진**.
-6. Open **채팅 대시보드 → OCR 설정 · 진단 → OCR 엔진 · 설치와 준비**. Follow the [OCR guide](Ocr/README.md): prepare uv → **실행 환경 설치** → **로컬 OCR 준비 · 확인**. The default PaddleOCR-VL requires an NVIDIA GPU and separate model download. If unsuitable, select Windows OCR and install its language packs.
+6. Review and approve the Paddle setup prompt. Required tools (including uv), Python, libraries and the model are downloaded automatically, followed by model preparation. Use **OCR 설치 · 준비** in the same guide for OCR-only setup. If your NVIDIA GPU environment is unsuitable, select Windows OCR on the dashboard and install its language packs.
 7. Configure languages and click **설정 저장** (Save settings).
 
 Ollama and the local model can be prepared through the app. Initial downloads require internet access. **No API key, Docker or WSL is required.**
@@ -264,7 +264,7 @@ Start with the default hybrid engine, **Hy-MT2 1.8B**, **PaddleOCR-VL**, EN/JP/K
 | 번역 테스트 · 사전 | Text translation tests, compatibility checks and custom glossary |
 | 시작 가이드 · 점검 | Recommended setup, diagnostics, repair and diagnostic export |
 
-All OCR options are under **Chat dashboard → OCR 설정 · 진단** (OCR settings / diagnostics), not the overlay page. Save settings after changes.
+The OCR selector, status and **OCR 설치 / OCR 준비** buttons are always visible on the chat dashboard. Only filters, stabilization and runtime-folder options are under **세부 설정 · 진단** (Advanced / diagnostics). Save settings after changes.
 
 ### 3. Translate outgoing chat
 
@@ -299,14 +299,14 @@ Startup chat, previously processed text, system/broadcast messages, input rows a
 
 Nicknames and channel labels are separated from the body. **Your messages are not excluded merely because you sent them**, but repeated identical text can be deduplicated.
 
-For greetings, choose **OCR 설정 · 진단 → 채팅 필터 · OCR 세부 조정 → 잡담도 번역**, then send a different new message.
+For greetings, choose **세부 설정 · 진단 → 잡담도 번역**, then send a different new message.
 
 #### OCR options
 
-Under **OCR 설정 · 진단**:
+Setup needs no expanded menu. Under **세부 설정 · 진단**:
 
 - **채팅 필터 · OCR 세부 조정:** casual-chat filtering, stabilization, small-text enhancement and two-frame agreement.
-- **OCR 엔진 · 설치와 준비:** Default PaddleOCR-VL, alternative Windows OCR and setup.
+- The OCR selector and preparation controls are directly on the incoming-chat card.
 - **OCR 처리 상세:** recognition, exclusions, queue and translation status.
 
 Windows OCR automatically checks the latest portion and full panel while reducing work on unchanged frames. No manual dual-region or map configuration is needed.
@@ -346,9 +346,9 @@ To switch models: select the model → **로컬 AI 설치** → **예열 상태 
 
 PaddleOCR-VL is the **default OCR engine** for mixed-language chat. Prepare its separate runtime and model before first use. It remains experimental; use Windows OCR as a lighter alternative if your GPU environment is unsuitable.
 
-1. Open **OCR 설정 · 진단 → OCR 엔진 · 설치와 준비**.
-2. Follow the [OCR installation guide](Ocr/README.md) to prepare `uv`, then click **실행 환경 설치**.
-3. Select PaddleOCR-VL and click **로컬 OCR 준비 · 확인**.
+1. Click **시작 가이드 · 점검 → OCR 설치 · 준비**. Recommended-engine setup also includes this step.
+2. Approve setup to download required tools and models automatically. Progress and errors appear in the guide.
+3. Model preparation follows installation automatically. Existing runtimes are reused; use **OCR 설치** on the dashboard to rerun installation or **OCR 준비** to continue.
 4. Compare **OCR 테스트** results before starting OCR.
 
 The current setup targets NVIDIA GPUs. Allow several GB of downloads and about 10GB free disk space. The measured development setup used roughly 2GB additional GPU memory and seconds per recognition pass; actual performance varies. Windows language packs are not required for this engine, but source-language checkboxes still filter translation.
@@ -381,7 +381,7 @@ In **팀 전용 사전**, enter one `source=preferred spelling` pair per line, s
 | Cannot move overlay | Use the dedicated overlay position/size editing button |
 | Delay or FPS loss | Compare the 1.8B model and the lighter Windows OCR alternative; stop unnecessary OCR |
 | Lite output withheld | Compare hybrid/local AI and inspect counts, directions and negation |
-| Paddle installation fails | Check uv, NVIDIA environment, disk space and the separate OCR guide |
+| Paddle installation fails | Read the guide status; check network, NVIDIA environment and disk space, then retry OCR setup |
 
 Use **시작 가이드 · 점검 → 전체 점검** for diagnostics and **진단 저장** to export details. Review files before sharing.
 

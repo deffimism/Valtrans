@@ -19,12 +19,12 @@ try {
   const root = await fetch(`http://127.0.0.1:${port}/`);
   const rootText = await root.text();
   if (!root.ok || !rootText.includes('Valtrans')) throw new Error('static site failed');
-  for (const required of ['PaddleOCR-VL', 'NVIDIA GPU', '로컬 전용', 'id="setup"', 'v0.2.0-beta']) {
+  for (const required of ['PaddleOCR-VL', 'NVIDIA GPU', '로컬 전용', 'id="setup"', 'v0.2.1-beta']) {
     if (!rootText.includes(required)) throw new Error(`site product information missing: ${required}`);
   }
   if (rootText.includes('외부 API는 선택 사항') || rootText.includes('v0.1.1-beta')) throw new Error('stale site information');
   const setup = rootText.match(/<section id="setup"[\s\S]*?<\/section>/)?.[0] || '';
-  if (!setup.includes('첫 게임 전, 세 가지만') || !setup.includes('class="setup-note"')) throw new Error('setup copy/layout missing');
+  if (!setup.includes('첫 게임 전, 세 가지만') || !setup.includes('한 번에 설치 준비') || !setup.includes('class="setup-note"')) throw new Error('setup copy/layout missing');
   if (/한 번 전환|uv 준비|class="lead"/.test(setup)) throw new Error('technical release notes leaked into setup copy');
   const setupCss = await fetch(`http://127.0.0.1:${port}/setup.css`);
   if (!setupCss.ok || !(await setupCss.text()).includes('word-break: keep-all')) throw new Error('setup stylesheet missing');
