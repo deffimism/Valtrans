@@ -24,7 +24,7 @@ public static class OcrProfileValidationService
         var region = settings.CaptureRegion.ToRectangle();
         if (!ContainsWithTolerance(referenceBounds, region, 4))
             return new OcrProfileValidationResult(OcrProfileValidity.Invalid,
-                "저장 영역이 현재 게임 창 밖에 있습니다. 추천 영역 또는 직접 선택이 필요합니다.", key);
+                "영역이 현재 게임 창 밖에 있습니다. 추천 영역을 새로고침해 주세요.", key);
 
         if (!settings.CaptureProfileMetadataByGame.TryGetValue(key, out var metadata))
             return new OcrProfileValidationResult(OcrProfileValidity.Valid,

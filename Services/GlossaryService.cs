@@ -6,14 +6,6 @@ namespace Valtrans.Services;
 
 public sealed partial class GlossaryService
 {
-    private static readonly IReadOnlyDictionary<string, string[]> MapsByGame =
-        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Auto"] = ["Auto"],
-            ["VALORANT"] = ["Auto", "Ascent", "Bind", "Haven", "Split", "Icebox", "Breeze", "Fracture", "Pearl", "Lotus", "Sunset", "Abyss", "Corrode"],
-            ["Apex Legends"] = ["Auto", "World's Edge", "Kings Canyon", "Olympus", "Storm Point", "Broken Moon", "E-District"]
-        };
-
     private static readonly Dictionary<string, string> CommonLocations = new(StringComparer.OrdinalIgnoreCase)
     {
         ["헤븐"] = "Heaven", ["ヘブン"] = "Heaven", ["헬"] = "Hell", ["ヘル"] = "Hell",
@@ -37,27 +29,6 @@ public sealed partial class GlossaryService
         ["제작기"] = "Crafter", ["クラフター"] = "Crafter", ["집라인"] = "Zipline", ["ジップ"] = "Zipline"
     };
 
-    private static readonly IReadOnlyDictionary<string, Dictionary<string, string>> MapLocations =
-        new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Ascent"] = Locations(("트리", "Tree"), ("ツリー", "Tree"), ("마켓", "Market"), ("マーケット", "Market"), ("캣", "Catwalk"), ("캣워크", "Catwalk"), ("피자", "Pizza"), ("와인", "Wine"), ("제너레이터", "Generator"), ("보트", "Boathouse")),
-            ["Bind"] = Locations(("후카", "Hookah"), ("フッカー", "Hookah"), ("샤워", "Showers"), ("シャワー", "Showers"), ("엘보", "Elbow"), ("램프", "Lamps"), ("ランプ", "Lamps"), ("가든", "Garden")),
-            ["Haven"] = Locations(("개러지", "Garage"), ("ガレージ", "Garage"), ("시워", "Sewers"), ("하수도", "Sewers"), ("그래스", "Grass"), ("잔디", "Grass"), ("윈도우", "Window")),
-            ["Split"] = Locations(("로프", "Ropes"), ("ロープ", "Ropes"), ("벤트", "Vents"), ("ベント", "Vents"), ("메일", "Mail"), ("스크린", "Screens"), ("スクリーン", "Screens"), ("앨리", "Alley")),
-            ["Icebox"] = Locations(("키친", "Kitchen"), ("キッチン", "Kitchen"), ("튜브", "Tube"), ("チューブ", "Tube"), ("옐로", "Yellow"), ("오렌지", "Orange"), ("스노우맨", "Snowman"), ("벨트", "Belt")),
-            ["Breeze"] = Locations(("케이브", "Cave"), ("ケイブ", "Cave"), ("홀", "Hall"), ("ブリッジ", "Bridge"), ("브리지", "Bridge"), ("피라미드", "Pyramids"), ("네스트", "Nest")),
-            ["Fracture"] = Locations(("아케이드", "Arcade"), ("アーケード", "Arcade"), ("디시", "Dish"), ("ドロップ", "Drop"), ("드롭", "Drop"), ("타워", "Tower"), ("로프", "Rope")),
-            ["Pearl"] = Locations(("아트", "Art"), ("アート", "Art"), ("시크릿", "Secret"), ("シークレット", "Secret"), ("플라워", "Flowers"), ("レコード", "Records"), ("레코드", "Records")),
-            ["Lotus"] = Locations(("루트", "Root"), ("ルート", "Root"), ("러블", "Rubble"), ("마운드", "Mound"), ("マウンド", "Mound"), ("워터폴", "Waterfall"), ("트리", "Tree")),
-            ["Sunset"] = Locations(("타일", "Tiles"), ("タイル", "Tiles"), ("마켓", "Market"), ("マーケット", "Market"), ("바바", "Boba"), ("ボバ", "Boba"), ("엘보", "Elbow"), ("코트야드", "Courtyard")),
-            ["Abyss"] = Locations(("브리지", "Bridge"), ("ブリッジ", "Bridge"), ("네스트", "Nest"), ("타워", "Tower"), ("시크릿", "Secret"), ("라이브러리", "Library")),
-            ["World's Edge"] = Locations(("프래그먼트", "Fragment"), ("フラグメント", "Fragment"), ("라바 사이펀", "Lava Siphon"), ("클라이머타이저", "Climatizer"), ("스카이후크", "Skyhook"), ("모뉴먼트", "Monument")),
-            ["Kings Canyon"] = Locations(("벙커", "Bunker"), ("バンカー", "Bunker"), ("마켓", "Market"), ("케이지", "The Cage"), ("캐패시터", "Capacitor"), ("랩스", "Labs")),
-            ["Olympus"] = Locations(("해먼드", "Hammond Labs"), ("ハモンド", "Hammond Labs"), ("터빈", "Turbine"), ("페이즈", "Phase Runner"), ("가든", "Gardens"), ("에너지 디포", "Energy Depot")),
-            ["Storm Point"] = Locations(("체크포인트", "Checkpoint"), ("チェックポイント", "Checkpoint"), ("바로미터", "Barometer"), ("커맨드 센터", "Command Center"), ("더 밀", "The Mill"), ("캐스케이드", "Cascade Falls")),
-            ["Broken Moon"] = Locations(("코어", "The Core"), ("コア", "The Core"), ("프로덕션", "Production Yard"), ("테라포머", "Terraformer"), ("브레이커 워프", "Breaker Wharf"), ("이터널 가든", "Eternal Gardens")),
-            ["E-District"] = Locations(("시티 홀", "City Hall"), ("シティホール", "City Hall"), ("스타디움", "Stadium"), ("ネオンスクエア", "Neon Square"), ("네온 스퀘어", "Neon Square"), ("올드 타운", "Old Town"))
-        };
     private static readonly Dictionary<string, string> FpsTerms = new(StringComparer.OrdinalIgnoreCase)
     {
         ["nt"] = "nice try",
@@ -272,9 +243,19 @@ public sealed partial class GlossaryService
             ["rez me"] = ("revive me", "살려줘", "蘇生お願い")
         };
 
-    // Official English names, checked against Riot and EA character rosters.
-    private static readonly Dictionary<string, string> CharacterNames = new(StringComparer.OrdinalIgnoreCase)
+    // Official English character names (Riot/EA) and map names (Riot map directory).
+    private static readonly Dictionary<string, string> ProperNames = new(StringComparer.OrdinalIgnoreCase)
     {
+        // Map names are references only, never a selected map or tactical context.
+        // https://playvalorant.com/ko-kr/maps/ and /ja-jp/maps/ (2026-09-08).
+        ["어센트"] = "Ascent", ["アセント"] = "Ascent",
+        ["바인드"] = "Bind", ["バインド"] = "Bind",
+        ["헤이븐"] = "Haven", ["ヘイヴン"] = "Haven",
+        ["스플릿"] = "Split", ["スプリット"] = "Split",
+        ["아이스박스"] = "Icebox", ["브리즈"] = "Breeze", ["프랙처"] = "Fracture",
+        ["펄"] = "Pearl", ["로터스"] = "Lotus", ["선셋"] = "Sunset",
+        ["어비스"] = "Abyss", ["코로드"] = "Corrode", ["서밋"] = "Summit",
+
         // VALORANT
         ["아스트라"] = "Astra", ["브리치"] = "Breach", ["브림"] = "Brimstone", ["브림스톤"] = "Brimstone",
         ["체임버"] = "Chamber", ["클로브"] = "Clove", ["사이퍼"] = "Cypher", ["데드록"] = "Deadlock",
@@ -311,20 +292,17 @@ public sealed partial class GlossaryService
 
     public string NormalizeNames(string text, AppSettings settings)
     {
-        foreach (var pair in CharacterNames.Concat(settings.CustomGlossary).OrderByDescending(x => x.Key.Length))
+        foreach (var pair in ProperNames.Concat(settings.CustomGlossary).OrderByDescending(x => x.Key.Length))
         {
             text = Regex.Replace(text, Regex.Escape(pair.Key), pair.Value, RegexOptions.IgnoreCase);
         }
         return text;
     }
 
-    public IReadOnlyList<string> GetMaps(string game) =>
-        MapsByGame.TryGetValue(game, out var maps) ? maps : MapsByGame["Auto"];
-
     internal bool IsStandaloneCanonicalReference(string text, AppSettings settings)
     {
         var value = text.Trim().Trim('.', '!', '?', '。', '！', '？');
-        return CharacterNames.Values.Concat(SelectedLocations(settings).Values)
+        return ProperNames.Values.Concat(SelectedLocations(settings).Values)
             .Concat(settings.CustomGlossary.Values)
             .Any(term => value.Equals(term, StringComparison.OrdinalIgnoreCase));
     }
@@ -393,7 +371,7 @@ public sealed partial class GlossaryService
 
         // Character names stay in their official English spelling. Location names are restored in the
         // output language so a protected "Mid" does not leak into a Korean/Japanese callout.
-        text = ProtectFacts(text, CharacterNames.Values.Select(name => (name, name)));
+        text = ProtectFacts(text, ProperNames.Values.Select(name => (name, name)));
         text = ProtectFacts(text, SelectedLocations(settings).Values.Select(location =>
             (location, LocalizeCalloutLocation(location, targetLanguage, settings))));
         text = ProtectFacts(text, settings.CustomGlossary.Values.Select(value => (value, value)));
@@ -430,7 +408,7 @@ public sealed partial class GlossaryService
         foreach (var pair in FpsTerms.Where(pair => !ContextSensitiveTerms.Contains(pair.Key)))
             builder.Append(pair.Key).Append('=').Append(pair.Value).Append("; ");
         builder.Append("Ambiguous slang: infer only from this sentence. 'save me' means help/revive me; 'you are cracked' may be praise. Never assume low HP means exactly 1 HP. Preserve who acted, negation and uncertainty. ");
-        builder.Append("Locations for ").Append(settings.Map == "Auto" ? settings.Game : settings.Map).Append(": ");
+        builder.Append("Common location vocabulary: ");
         foreach (var pair in SelectedLocations(settings)) builder.Append(pair.Key).Append('=').Append(pair.Value).Append("; ");
         if (settings.CustomGlossary.Count > 0)
         {
@@ -440,17 +418,9 @@ public sealed partial class GlossaryService
         return builder.ToString();
     }
 
-    private static Dictionary<string, string> SelectedLocations(AppSettings settings)
-    {
-        var result = new Dictionary<string, string>(CommonLocations, StringComparer.OrdinalIgnoreCase);
-        if (!settings.Map.Equals("Auto", StringComparison.OrdinalIgnoreCase) &&
-            MapLocations.TryGetValue(settings.Map, out var selected))
-            foreach (var pair in selected) result[pair.Key] = pair.Value;
-        return result;
-    }
-
-    private static Dictionary<string, string> Locations(params (string Alias, string Canonical)[] values) =>
-        values.ToDictionary(value => value.Alias, value => value.Canonical, StringComparer.OrdinalIgnoreCase);
+    // No selected-map overrides: the same unambiguous common vocabulary is used everywhere.
+    private static Dictionary<string, string> SelectedLocations(AppSettings settings) =>
+        new(CommonLocations, StringComparer.OrdinalIgnoreCase);
 
     public bool TryTranslateExactShortcut(string text, string target, out string translated, AppSettings? settings = null)
     {
@@ -663,7 +633,7 @@ public sealed partial class GlossaryService
     }
 
     private static string? CanonicalCharacterName(string value, AppSettings settings) =>
-        CharacterNames.Values.Concat(settings.CustomGlossary.Values)
+        ProperNames.Values.Concat(settings.CustomGlossary.Values)
             .FirstOrDefault(name => name.Equals(value, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsLikelyLocation(string value, AppSettings settings)

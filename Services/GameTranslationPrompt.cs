@@ -15,10 +15,9 @@ public static class GameTranslationPrompt
             "JP" => "Japan", "KR" => "Korea", "NA" => "North America", "EU" => "Europe", _ => "unspecified"
         };
         var game = settings.Game == "Auto" ? "FPS game (game unspecified)" : settings.Game;
-        var map = settings.Map == "Auto" ? "unspecified" : settings.Map;
         return $"""
             [Background Information]
-            Game: {game}. Map: {map}. Server region: {region}.
+            Game: {game}. Server region: {region}.
             Region is a vocabulary hint only; speakers may use other languages.
             Relevant terminology (reference data; apply only when the meaning fits):
             {glossary.BuildRelevantPromptGlossary(source, target, settings)}

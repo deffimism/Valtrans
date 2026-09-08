@@ -10,6 +10,9 @@ public partial class OverlayWindow : System.Windows.Window
 {
     private readonly ObservableCollection<OverlayLine> _lines = new();
     private bool _clickThrough;
+    private double _backgroundOpacity = 0.38;
+    private double _borderOpacity = 0.48;
+    public event EventHandler? MoveFinished;
 
     public OverlayWindow()
     {
@@ -43,18 +46,38 @@ public partial class OverlayWindow : System.Windows.Window
     public void SetClickThrough(bool enabled)
     {
         _clickThrough = enabled;
+        MoveBar.Visibility = enabled ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
         ResizeHandle.Visibility = enabled ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+        UpdateAppearance();
         if (IsInitialized) ApplyExtendedStyle();
     }
 
     public void SetBackgroundOpacity(double opacity)
     {
         opacity = Math.Clamp(opacity, 0, 1);
-        OverlayRoot.Background = Brush(opacity, 17, 24, 44);
+        _backgroundOpacity = opacity;
+        UpdateAppearance();
     }
 
-    public void SetBorderOpacity(double opacity) =>
-        OverlayRoot.BorderBrush = Brush(Math.Clamp(opacity, 0, 1), 129, 140, 248);
+    public void SetBorderOpacity(double opacity)
+    {
+        _borderOpacity = Math.Clamp(opacity, 0, 1);
+        UpdateAppearance();
+    }
+
+    private void UpdateAppearance()
+    {
+        // Transparent layered pixels cannot reliably receive mouse input. Only
+        // while editing, provide a visible hit area; restore exact settings on lock.
+        OverlayRoot.Background = Brush(_clickThrough ? _backgroundOpacity : Math.Max(0.12, _backgroundOpacity), 17, 24, 44);
+        OverlayRoot.BorderBrush = Brush(_clickThrough ? _borderOpacity : Math.Max(0.65, _borderOpacity), 129, 140, 248);
+    }
+
+    private void FinishMove_OnClick(object sender, System.Windows.RoutedEventArgs e)
+    {
+        SetClickThrough(true);
+        MoveFinished?.Invoke(this, EventArgs.Empty);
+    }
 
     private static SolidColorBrush Brush(double opacity, byte red, byte green, byte blue) =>
         new(Color.FromArgb((byte)Math.Round(opacity * 255), red, green, blue));
@@ -62,10 +85,11 @@ public partial class OverlayWindow : System.Windows.Window
     private void ApplyExtendedStyle()
     {
         var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
         var style = NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GwlExStyle).ToInt64();
-        style |= NativeMethods.WsExToolWindow | NativeMethods.WsExNoActivate;
-        if (_clickThrough) style |= NativeMethods.WsExTransparent;
-        else style &= ~NativeMethods.WsExTransparent;
+        style |= NativeMethods.WsExToolWindow;
+        if (_clickThrough) style |= NativeMethods.WsExTransparent | NativeMethods.WsExNoActivate;
+        else style &= ~(NativeMethods.WsExTransparent | NativeMethods.WsExNoActivate);
         NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GwlExStyle, new IntPtr(style));
     }
 

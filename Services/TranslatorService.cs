@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -9,17 +8,11 @@ namespace Valtrans.Services;
 
 public sealed class TranslatorService
 {
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
     private readonly HttpClient _localHttp = new() { Timeout = TimeSpan.FromMinutes(2) };
     private readonly GlossaryService _glossary;
     private readonly LocalAiService _localAi;
     private readonly ValtransLiteService _lite;
-    private readonly DeepLApiService _deepLApi;
-    private readonly object _deepLxCircuitLock = new();
-    private DateTimeOffset _deepLxSuspendedUntil;
-    private string _deepLxSuspendedReason = "";
 
-    public event EventHandler<TranslationFallbackEventArgs>? LocalFallbackActivated;
     public event EventHandler<HybridRouteEventArgs>? HybridRouteSelected;
     public event EventHandler<TranslationSafetyEventArgs>? TranslationSafetyAdjusted;
     public string LastHybridRoute { get; private set; } = "";
@@ -29,7 +22,6 @@ public sealed class TranslatorService
         _glossary = glossary;
         _localAi = localAi;
         _lite = lite;
-        _deepLApi = new DeepLApiService(_http);
     }
 
     public async Task<string> TranslateAsync(string text, string targetLanguage, AppSettings settings,
@@ -63,25 +55,7 @@ public sealed class TranslatorService
             result = BriefingTranslationGuard.Apply(text, structuredCallout, targetLanguage);
         else if (settings.TranslationProvider.Equals("Lite", StringComparison.OrdinalIgnoreCase))
             result = await TranslateWithLiteAsync(text, targetLanguage, settings, preserveLines, cancellationToken);
-        else if (settings.TranslationProvider.Equals("DeepL", StringComparison.OrdinalIgnoreCase))
-            result = Clean(await _deepLApi.TranslateAsync(text, targetLanguage, settings.DeepLApiKey, cancellationToken), preserveLines);
-        else if (settings.TranslationProvider.Equals("DeepLX", StringComparison.OrdinalIgnoreCase))
-        {
-            if (TryGetDeepLxCircuit(out var remaining, out var reason))
-                result = await TranslateWithLocalFallbackAsync(text, targetLanguage, settings, preserveLines,
-                    $"DLX 요청 일시 중지 · {FormatRemaining(remaining)} 후 재시도 · {reason}", cancellationToken);
-            else try
-            {
-                result = await TranslateWithDeepLxAsync(text, targetLanguage, settings, preserveLines, cancellationToken);
-            }
-            catch (DeepLxRequestException ex) when (ex.IsTransient)
-            {
-                var cooldown = OpenDeepLxCircuit(ex);
-                result = await TranslateWithLocalFallbackAsync(text, targetLanguage, settings, preserveLines,
-                    $"DLX 제한 감지 · {FormatRemaining(cooldown)} 동안 로컬 사용", cancellationToken, ex);
-            }
-        }
-        else if (settings.TranslationProvider is "Ollama" or "OpenAI")
+        else if (settings.TranslationProvider == "Ollama")
             result = await TranslateWithChatModelAsync(text, targetLanguage, settings, preserveLines, cancellationToken);
         else
             throw new InvalidOperationException("지원하지 않는 번역 엔진입니다. 무료 로컬 엔진을 선택해 주세요.");
@@ -160,21 +134,14 @@ public sealed class TranslatorService
         }
         if (engine.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
             return await TranslateWithChatModelAsync(source, targetLanguage, settings, false, cancellationToken,
-                forceLocal: true, localModel: settings.LocalAiModel);
-        if (engine.Equals("DeepLX", StringComparison.OrdinalIgnoreCase))
-            return await TranslateWithDeepLxAsync(source, targetLanguage, settings, false, cancellationToken);
-        if (engine.Equals("DeepL", StringComparison.OrdinalIgnoreCase))
-            return await _deepLApi.TranslateAsync(source, targetLanguage, settings.DeepLApiKey, cancellationToken);
-        return await TranslateWithChatModelAsync(source, targetLanguage, settings, false, cancellationToken);
+                localModel: settings.LocalAiModel);
+        throw new InvalidOperationException("로컬 번역 엔진을 선택해 주세요.");
     }
 
     private static string EngineDisplayName(string engine, AppSettings settings) => engine switch
     {
         "Lite" => "Valtrans Lite",
         "Ollama" => LocalAiService.GetModel(settings.LocalAiModel).DisplayName.Split('·')[0].Trim(),
-        "DeepLX" => "DLX",
-        "DeepL" => "DeepL 공식 API",
-        "OpenAI" => "GPT-4o mini",
         _ => engine
     };
 
@@ -190,39 +157,20 @@ public sealed class TranslatorService
     };
 
     private async Task<string> TranslateWithChatModelAsync(string text, string targetLanguage, AppSettings settings,
-        bool preserveLines, CancellationToken cancellationToken, bool forceLocal = false, string? localModel = null)
+        bool preserveLines, CancellationToken cancellationToken, string? localModel = null)
     {
-        var useLocal = forceLocal || settings.TranslationProvider.Equals("Ollama", StringComparison.OrdinalIgnoreCase);
-        var baseUrl = useLocal ? LocalAiService.OpenAiBaseUrl : "https://api.openai.com/v1";
-        var model = useLocal ? LocalAiService.NormalizeModelName(localModel ?? settings.LocalAiModel) : "gpt-4o-mini";
-        if (!useLocal && string.IsNullOrWhiteSpace(settings.ApiKey))
-            throw new InvalidOperationException("먼저 번역 API 키를 저장해 주세요.");
+        var baseUrl = LocalAiService.CompletionBaseUrl;
+        var model = LocalAiService.NormalizeModelName(localModel ?? settings.LocalAiModel);
 
         // Do not pre-expand ambiguous words or replace quantities with opaque placeholders.
         // The model needs the original sentence to preserve relationships and ordinary meanings.
         var normalized = text;
         var targetName = targetLanguage switch { "KO" => "Korean", "JP" => "Japanese", _ => "English" };
         var game = settings.Game == "Auto" ? "VALORANT or Apex Legends" : settings.Game;
-        var map = settings.Map == "Auto" ? "an unspecified map" : settings.Map;
         var lineRule = preserveLines
             ? "Keep the same line count and order. Return only translated lines."
             : "Return exactly one short line with no explanation or quotation marks.";
-        var fpsStyle = FpsStyleExamples(targetLanguage);
-        var system = $"""
-            You translate live FPS game chat into {targetName} for {game} on {map}.
-            Server region hint: {GameTranslationPrompt.NormalizeRegion(settings.ServerRegion)}; never use this to override the sentence's meaning.
-            Compress messages into short, natural FPS callouts. Remove subjects, politeness, filler, and sentence endings when the intent stays clear.
-            Romanized Japanese such as 'wakarimashita', 'daijoubu', or 'teki middo' is Japanese and must be translated by meaning, not copied phonetically.
-            Preserve numbers, pings, map labels, and official English character names.
-            Understand FPS shorthand and intent; 'mid' is a map position. Prefer established gamer slang over literal prose.
-            Never add information. Preserve all meaning before shortening; there is no character limit. {lineRule}
-            {BriefingTranslationGuard.PromptRules}
-            Style examples: {fpsStyle}
-            Glossary: {_glossary.BuildRelevantPromptGlossary(text, targetLanguage, settings)}
-            """;
-
         object[] messages;
-        if (useLocal)
         {
             var sourceCode = DetectSourceLanguage(text);
             var (sourceName, sourceTag) = LanguageDetails(sourceCode);
@@ -237,7 +185,7 @@ public sealed class TranslatorService
             {
                 localPrompt = $"""
                     You are a professional {sourceName} ({sourceTag}) to {targetName} ({targetTag}) translator. Your goal is to accurately convey the meaning and nuances of the original {sourceName} text while adhering to {targetName} grammar, vocabulary, and cultural sensitivities.
-                    Context: {game}, map {map}, server region hint {GameTranslationPrompt.NormalizeRegion(settings.ServerRegion)}. Natural team chat, not a summary. Preserve meaning, negation, conditions and quantities. {lineRule}
+                    Context: {game}, server region hint {GameTranslationPrompt.NormalizeRegion(settings.ServerRegion)}. Natural team chat, not a summary. Preserve meaning, negation, conditions and quantities. {lineRule}
                     Reference terminology: {_glossary.BuildRelevantPromptGlossary(text, targetLanguage, settings)}
                     Produce only the {targetName} translation, without any additional explanations or commentary. Please translate the following {sourceName} text into {targetName}:
 
@@ -247,17 +195,8 @@ public sealed class TranslatorService
             }
             messages = new object[] { new { role = "user", content = localPrompt } };
         }
-        else
-        {
-            messages = new object[]
-            {
-                new { role = "system", content = system },
-                new { role = "user", content = normalized }
-            };
-        }
-
-        if (useLocal && (model.StartsWith("qwen3:", StringComparison.OrdinalIgnoreCase) ||
-                         LocalAiService.IsHyMtModel(model)))
+        if (model.StartsWith("qwen3:", StringComparison.OrdinalIgnoreCase) ||
+            LocalAiService.IsHyMtModel(model))
         {
             var isHyMt = LocalAiService.IsHyMtModel(model);
             object options = isHyMt
@@ -299,11 +238,9 @@ public sealed class TranslatorService
         var payload = new { model, temperature = 0.0, max_tokens = 384, messages };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/chat/completions");
-        if (!useLocal && !string.IsNullOrWhiteSpace(settings.ApiKey))
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
         request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-        using var response = await (useLocal ? _localHttp : _http).SendAsync(request, cancellationToken);
+        using var response = await _localHttp.SendAsync(request, cancellationToken);
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
@@ -361,7 +298,7 @@ public sealed class TranslatorService
             try
             {
                 var result = await TranslateWithChatModelAsync(text, targetLanguage, settings, false,
-                    cancellationToken, forceLocal: true, localModel: localModel);
+                    cancellationToken, localModel: localModel);
                 ReportHybridRoute(localDisplayName, "번역 특화 로컬 모델");
                 return result;
             }
@@ -387,7 +324,7 @@ public sealed class TranslatorService
             try
             {
                 var refined = await TranslateWithChatModelAsync(text, targetLanguage, settings, false,
-                    cancellationToken, forceLocal: true, localModel: localModel);
+                    cancellationToken, localModel: localModel);
                 ReportHybridRoute(preferLocal ? localDisplayName : $"{localDisplayName} 보정", "Lite 결과 보정");
                 return refined;
             }
@@ -522,168 +459,6 @@ public sealed class TranslatorService
         return result;
     }
 
-    public async Task TestOpenAiConnectionAsync(string apiKey, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(apiKey)) throw new InvalidOperationException("API 키를 먼저 입력해 주세요.");
-        var payload = new
-        {
-            model = "gpt-4o-mini",
-            temperature = 0,
-            max_tokens = 3,
-            messages = new[] { new { role = "user", content = "Reply only OK" } }
-        };
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
-        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-        using var response = await _http.SendAsync(request, cancellationToken);
-        if (response.IsSuccessStatusCode) return;
-        var json = await response.Content.ReadAsStringAsync(cancellationToken);
-        throw new InvalidOperationException(TryReadError(json) ?? $"OpenAI 연결 오류 ({(int)response.StatusCode})");
-    }
-
-    public Task<string> CheckDeepLApiUsageAsync(string key, CancellationToken cancellationToken = default) =>
-        _deepLApi.CheckUsageAsync(key, cancellationToken);
-
-    public async Task TestDeepLxConnectionAsync(string endpoint, CancellationToken cancellationToken = default)
-    {
-        if (TryGetDeepLxCircuit(out var remaining, out var reason))
-            throw new InvalidOperationException($"DLX 요청을 잠시 쉬는 중입니다. {FormatRemaining(remaining)} 후 다시 확인해 주세요. ({reason})");
-        var settings = new AppSettings { TranslationProvider = "DeepLX", DeepLxUrl = endpoint };
-        try
-        {
-            var result = await TranslateWithDeepLxAsync("hello", "KO", settings, preserveLines: false, cancellationToken);
-            if (string.IsNullOrWhiteSpace(result)) throw new InvalidOperationException("DeepLX 테스트 결과가 비어 있습니다.");
-        }
-        catch (DeepLxRequestException ex) when (ex.IsTransient)
-        {
-            var cooldown = OpenDeepLxCircuit(ex);
-            throw new InvalidOperationException($"DLX 익명 요청이 제한됐습니다. {FormatRemaining(cooldown)} 동안 재요청하지 않습니다.", ex);
-        }
-    }
-
-    private async Task<string> TranslateWithDeepLxAsync(string text, string targetLanguage, AppSettings settings,
-        bool preserveLines, CancellationToken cancellationToken)
-    {
-        if (!Uri.TryCreate(settings.DeepLxUrl?.Trim(), UriKind.Absolute, out var endpoint) ||
-            endpoint.Scheme is not ("http" or "https"))
-            throw new InvalidOperationException("올바른 DeepLX 주소를 입력해 주세요.");
-
-        var normalized = _glossary.PrepareForLocalTranslation(text, settings);
-        normalized = ChatTextSanitizer.ConvertCommonRomanizedJapanese(normalized);
-        var source = DetectSourceLanguage(text) switch { "JP" => "JA", var code => code };
-        var target = targetLanguage == "JP" ? "JA" : targetLanguage;
-        var payload = new { text = normalized, source_lang = source, target_lang = target };
-        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
-        {
-            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
-        };
-
-        HttpResponseMessage response;
-        try
-        {
-            response = await _http.SendAsync(request, cancellationToken);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            throw new DeepLxRequestException("DLX 응답 시간이 초과됐습니다.");
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new DeepLxRequestException("DLX 서버에 연결하지 못했습니다.", null, ex);
-        }
-        using (response)
-        {
-        var json = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
-            throw new DeepLxRequestException(TryReadDeepLxError(json) ?? $"DLX 오류 ({(int)response.StatusCode})",
-                (int)response.StatusCode);
-
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            if (root.TryGetProperty("code", out var code) && code.GetInt32() != 200)
-                throw new DeepLxRequestException(TryReadDeepLxError(json) ?? "DLX 번역에 실패했습니다.", code.GetInt32());
-            var result = root.TryGetProperty("data", out var data) ? data.GetString()?.Trim() : null;
-            if (string.IsNullOrWhiteSpace(result)) throw new InvalidOperationException("DeepLX 번역 결과가 비어 있습니다.");
-            return BriefingTranslationGuard.Apply(text, Clean(result, preserveLines), targetLanguage);
-        }
-        catch (JsonException)
-        {
-            throw new InvalidOperationException("DeepLX 응답 형식이 올바르지 않습니다.");
-        }
-        }
-    }
-
-    private async Task<string> TranslateWithLocalFallbackAsync(string text, string targetLanguage,
-        AppSettings settings, bool preserveLines, string notice, CancellationToken cancellationToken,
-        Exception? deepLxError = null)
-    {
-        if (!settings.DeepLxAutoFallback)
-            throw deepLxError ?? new InvalidOperationException(notice);
-
-        var modelName = LocalAiService.NormalizeModelName(settings.LocalAiModel);
-        var status = await _localAi.GetStatusAsync(modelName, cancellationToken);
-        if (status.OllamaInstalled && (!status.Ready || !status.ModelLoaded))
-        {
-            await _localAi.WarmUpAsync(modelName, cancellationToken: cancellationToken);
-            status = await _localAi.GetStatusAsync(modelName, cancellationToken);
-        }
-        if (!status.Ready)
-            throw new InvalidOperationException($"{notice}. 선택한 로컬 대체 모델이 준비되지 않았습니다.", deepLxError);
-
-        var fallbackSettings = CloneForLocal(settings, modelName);
-        LocalFallbackActivated?.Invoke(this,
-            new TranslationFallbackEventArgs(notice, LocalAiService.GetModel(modelName).DisplayName));
-        return await TranslateAsync(text, targetLanguage, fallbackSettings, preserveLines, cancellationToken);
-    }
-
-    private static AppSettings CloneForLocal(AppSettings source, string modelName) => new()
-    {
-        TranslationProvider = "Ollama",
-        ApiBaseUrl = LocalAiService.OpenAiBaseUrl,
-        Model = modelName,
-        LocalAiModel = modelName,
-        Game = source.Game,
-        Map = source.Map,
-        CustomGlossary = new Dictionary<string, string>(source.CustomGlossary, StringComparer.OrdinalIgnoreCase)
-    };
-
-    private TimeSpan OpenDeepLxCircuit(DeepLxRequestException error)
-    {
-        var cooldown = error.StatusCode is 429 or 403
-            ? TimeSpan.FromMinutes(30)
-            : error.StatusCode is >= 500
-                ? TimeSpan.FromMinutes(2)
-                : TimeSpan.FromMinutes(1);
-        lock (_deepLxCircuitLock)
-        {
-            _deepLxSuspendedUntil = DateTimeOffset.UtcNow.Add(cooldown);
-            _deepLxSuspendedReason = error.StatusCode is 429 or 403
-                ? "비공식 익명 요청 제한"
-                : error.Message;
-        }
-        return cooldown;
-    }
-
-    private bool TryGetDeepLxCircuit(out TimeSpan remaining, out string reason)
-    {
-        lock (_deepLxCircuitLock)
-        {
-            remaining = _deepLxSuspendedUntil - DateTimeOffset.UtcNow;
-            reason = _deepLxSuspendedReason;
-            if (remaining > TimeSpan.Zero) return true;
-            remaining = TimeSpan.Zero;
-            _deepLxSuspendedUntil = default;
-            _deepLxSuspendedReason = "";
-            return false;
-        }
-    }
-
-    private static string FormatRemaining(TimeSpan value) => value.TotalMinutes >= 2
-        ? $"{Math.Ceiling(value.TotalMinutes):0}분"
-        : $"{Math.Max(1, Math.Ceiling(value.TotalSeconds)):0}초";
-
     private static string DetectSourceLanguage(string text)
     {
         text = ChatTextSanitizer.ContentForLanguageDetection(text);
@@ -700,32 +475,12 @@ public sealed class TranslatorService
         _ => ("English", "en")
     };
 
-    private static string FpsStyleExamples(string targetLanguage) => targetLanguage switch
-    {
-        "KO" => "There is one enemy at mid → 미드 1명; watch left → 왼쪽 조심; I am rotating to A → A 로테; enemy is very low → 적 딸피; understood/roger → 확인; sorry, my mistake → ㅈㅅ 내 실수",
-        "JP" => "There is one enemy at mid → ミッド1; watch left → 左注意; I am rotating to A → Aローテ; enemy is very low → 敵ロー; understood/roger → 了解; sorry, my mistake → ごめん、ミス",
-        _ => "미드에 한 명 → 1 mid; 왼쪽 조심해 → watch left; A로 돌아갈게 → rotating A; 적 딸피 → enemy 1 shot; 알겠어 → copy; 내 실수 → mb"
-    };
-
     private static string? TryReadError(string json)
     {
         try
         {
             using var document = JsonDocument.Parse(json);
             return document.RootElement.GetProperty("error").GetProperty("message").GetString();
-        }
-        catch { return null; }
-    }
-
-    private static string? TryReadDeepLxError(string json)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            if (root.TryGetProperty("message", out var message)) return message.GetString();
-            if (root.TryGetProperty("error", out var error)) return error.GetString();
-            return null;
         }
         catch { return null; }
     }
@@ -741,16 +496,6 @@ public sealed class TranslatorService
     }
 }
 
-public sealed class DeepLxRequestException : Exception
-{
-    public int? StatusCode { get; }
-    public bool IsTransient => StatusCode is null or 403 or 408 or 429 or >= 500;
-
-    public DeepLxRequestException(string message, int? statusCode = null, Exception? innerException = null)
-        : base(message, innerException) => StatusCode = statusCode;
-}
-
-public sealed record TranslationFallbackEventArgs(string Notice, string ModelDisplayName);
 public sealed record HybridRouteEventArgs(string Route, string Reason);
 public sealed record TranslationSafetyEventArgs(string Reason);
 public sealed record EngineCompatibilityResult(string Engine, string Probe, bool Success, bool SafetyAdjusted,

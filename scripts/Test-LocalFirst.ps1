@@ -1,124 +1,109 @@
 param([string]$AssemblyPath = "$PSScriptRoot/../publish/Valtrans.dll")
 $ErrorActionPreference = 'Stop'
 Add-Type -Path (Resolve-Path -LiteralPath $AssemblyPath)
+function Check($ok, $why) { if (-not $ok) { throw $why } }
+$fixtureDirectory = Join-Path $PSScriptRoot ('../artifacts/tests/local-only-' + [Guid]::NewGuid().ToString('N'))
+[void][IO.Directory]::CreateDirectory($fixtureDirectory)
+$fixturePath = Join-Path $fixtureDirectory 'settings.json'
+$settingsStore = [Valtrans.Services.SettingsService]::new($fixturePath)
+Check ($settingsStore.Load().TranslationProvider -eq 'Hybrid') 'Default not local'
+foreach ($schema in @(0,21,22,23)) {
+    foreach ($provider in @('DeepLX','DeepL','OpenAI','Unknown','Hybrid','Ollama','Lite')) {
+        $fixture = @{
+            SettingsSchemaVersion=$schema; TranslationProvider=$provider; LocalAiModel='valtrans-hymt2:7b'
+            Hotkey='F8'; ServerRegion='JP'; CustomGlossary=@{abc='custom'}; OverlayFontSize=20
+            ApiKey='fake-old-key'; ApiKeyProtected='invalid-old-blob'; DeepLApiKeyProtected='invalid-old-blob'
+            AutoStartDockerDesktop=$true; AutoSwitchGameProfile=$false; DualRegionOcr=$false
+            Map='Bind'; MapsByGame=@{VALORANT='Bind'}
+        }
+        [IO.File]::WriteAllText($fixturePath, ($fixture | ConvertTo-Json -Depth 4))
+        $loaded = $settingsStore.Load()
+        Check ($loaded.TranslationProvider -in @('Hybrid','Ollama','Lite')) 'Legacy cloud resurrected'
+        if ($schema -ge 22) {
+            $expected = if ($provider -in @('Hybrid','Ollama','Lite')) { $provider } else { 'Hybrid' }
+            Check ($loaded.TranslationProvider -eq $expected -and $loaded.LocalAiModel -eq 'valtrans-hymt2:7b') 'Local preference lost'
+        }
+        Check ($loaded.Hotkey -eq 'F8' -and $loaded.CustomGlossary['abc'] -eq 'custom' -and
+               $loaded.ServerRegion -eq 'JP' -and $loaded.OverlayFontSize -eq 20) 'User preference lost'
+        Check ($loaded.AutoSwitchGameProfile -and $loaded.DualRegionOcr) 'Automatic OCR missing'
+        $settingsStore.Save($loaded)
+        $saved = [IO.File]::ReadAllText($fixturePath)
+        Check ($saved -notmatch 'ApiKey|DeepL|Docker|ApiBaseUrl|MapsByGame|"Map"') 'Retired settings persisted'
+    }
+}
+Write-Output 'PASS: 28 migrations; preferences preserved; retired keys/map settings not persisted'
+$asm = [Valtrans.Services.TranslatorService].Assembly
+foreach ($type in @('Services.DeepLApiService','Services.DlxDockerService','Services.CredentialProtector','RegionSelectorWindow','OcrCalibrationWindow')) {
+    Check ($null -eq $asm.GetType("Valtrans.$type")) "Retired feature still shipped: $type"
+}
+[xml]$xml = Get-Content "$PSScriptRoot/../MainWindow.xaml" -Raw
+$ns = [Xml.XmlNamespaceManager]::new($xml.NameTable)
+$ns.AddNamespace('w','http://schemas.microsoft.com/winfx/2006/xaml/presentation')
+$ns.AddNamespace('x','http://schemas.microsoft.com/winfx/2006/xaml')
+$choices = $xml.SelectNodes('//w:ComboBox[@x:Name="TranslationProviderCombo"]/w:ComboBoxItem',$ns)
+Check ($choices.Count -eq 3 -and @($choices.Tag | Where-Object { $_ -notin @('Hybrid','Lite','Ollama') }).Count -eq 0) 'Nonlocal provider UI'
+Check ($xml.SelectNodes('//w:PasswordBox',$ns).Count -eq 0) 'API key input remains'
+foreach ($name in @('OcrChatFilterCombo','OcrStabilityCombo','OcrAutoEnhanceCheck','OcrConsensusCheck','OcrEngineCombo')) {
+    Check ($null -ne $xml.SelectSingleNode("//w:Expander[@x:Name='OcrDetailsPanel']//*[@x:Name='$name']",$ns)) "Scattered OCR option: $name"
+}
+Check ($xml.OuterXml -notmatch 'MapCombo|SelectRegion_OnClick|CalibrateOcr_OnClick|SelectLatestOcrRegion|DeepLxPanel|SimpleEnginePanel') 'Retired control remains'
+Write-Output 'PASS: local-only assembly/UI; grouped OCR controls; no manual crop or map selector'
 Add-Type -TypeDefinition @'
 using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-public sealed class LocalFirstHttp : HttpMessageHandler {
-    public string Url = "", Auth = "", Payload = "", Method = "";
-    public int Calls, Code = 200;
-    public string Body = "{\"translations\":[{\"text\":\"테스트 번역\"}]}";
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) {
-        token.ThrowIfCancellationRequested();
-        Calls++; Url = request.RequestUri.ToString(); Method = request.Method.Method;
-        Auth = request.Headers.Authorization.ToString();
-        Payload = request.Content == null ? "" : await request.Content.ReadAsStringAsync(token);
-        var response = new HttpResponseMessage((HttpStatusCode)Code) { Content = new StringContent(Body) };
-        if (Code == 429) response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromMinutes(2));
-        return response;
+public sealed class LocalOnlyHttp : HttpMessageHandler {
+    public int Calls;
+    public string LastPath = "";
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) {
+        if (!r.RequestUri.IsLoopback || r.RequestUri.Port != 11434 || r.Headers.Authorization != null)
+            throw new Exception("Nonlocal or credential-bearing request");
+        Calls++; LastPath = r.RequestUri.AbsolutePath;
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) {
+            Content = new StringContent("{\"done_reason\":\"stop\",\"message\":{\"content\":\"섬광 쓸 때까지 기다려\"},\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"content\":\"섬광 쓸 때까지 기다려\"}}]}")
+        });
     }
 }
 '@
-function Assert-True($value, $message) { if (-not $value) { throw $message } }
-function Assert-Failure($action, $fragment) {
-    $failed = $false
-    try { & $action | Out-Null } catch { $failed = $_.Exception.GetBaseException().Message.Contains($fragment) }
-    Assert-True $failed "Expected failure: $fragment"
-}
-$none = [Threading.CancellationToken]::None
-$handler = [LocalFirstHttp]::new()
+$lite = [Valtrans.Services.ValtransLiteService]::new((Join-Path $fixtureDirectory 'unused-lite'))
+$glossary = [Valtrans.Services.GlossaryService]::new()
+$translator = [Valtrans.Services.TranslatorService]::new($glossary,[Valtrans.Services.LocalAiService]::new(),$lite)
+$handler = [LocalOnlyHttp]::new()
 $client = [Net.Http.HttpClient]::new($handler)
-$service = [Valtrans.Services.DeepLApiService]::new($client)
+$field = [Valtrans.Services.TranslatorService].GetField('_localHttp',[Reflection.BindingFlags]'Instance,NonPublic')
+$oldClient = $field.GetValue($translator)
+$field.SetValue($translator,$client)
 try {
-    Assert-Failure { $service.TranslateAsync('example', 'KO', '', $none).GetAwaiter().GetResult() } 'API 키'
-    Assert-True ($handler.Calls -eq 0) 'Missing key caused network request'
-    $result = $service.TranslateAsync('example', 'JP', 'fake-deepl:fx', $none).GetAwaiter().GetResult()
-    Assert-True ($result -eq '테스트 번역') 'Result parse'
-    Assert-True ($handler.Url -eq 'https://api-free.deepl.com/v2/translate') 'Free endpoint'
-    Assert-True ($handler.Auth -eq 'DeepL-Auth-Key fake-deepl:fx') 'DeepL authorization'
-    $body = $handler.Payload | ConvertFrom-Json
-    Assert-True ($body.target_lang -eq 'JA' -and $body.text[0] -eq 'example') 'Japanese/payload mapping'
-    $service.TranslateAsync('example', 'KO', 'fake-pro-key', $none).GetAwaiter().GetResult() | Out-Null
-    Assert-True ($handler.Url -eq 'https://api.deepl.com/v2/translate') 'Pro endpoint'
-    $handler.Body = '{"character_count":123,"character_limit":500000}'
-    $service.CheckUsageAsync('fake-deepl:fx', $none).GetAwaiter().GetResult() | Out-Null
-    Assert-True ($handler.Method -eq 'GET' -and $handler.Url.EndsWith('/usage') -and $handler.Payload -eq '') 'Usage must not translate'
-    $handler.Body = '{"translations":[]}'
-    Assert-Failure { $service.TranslateAsync('example', 'KO', 'fake-deepl:fx', $none).GetAwaiter().GetResult() } '비어'
-    foreach ($status in @(403,456,503)) {
-        $handler.Code = $status
-        $before = $handler.Calls
-        Assert-Failure { $service.TranslateAsync('example', 'KO', 'fake-deepl:fx', $none).GetAwaiter().GetResult() } "$status"
-        Assert-True ($handler.Calls -eq $before + 1) 'Unexpected retry or paid fallback'
+    $settings = [Valtrans.Models.AppSettings]::new()
+    foreach ($provider in @('Ollama','Hybrid')) {
+        $settings.TranslationProvider = $provider
+        foreach ($model in @('valtrans-hymt2:1.8b','translategemma:4b')) {
+            $settings.LocalAiModel = $model
+            foreach ($receive in @($false,$true)) {
+                $result = $translator.TranslateAsync('please wait until I flash','KO',$settings,$receive,
+                    [Threading.CancellationToken]::None).GetAwaiter().GetResult()
+                Check ($result -eq '섬광 쓸 때까지 기다려') 'Local translation changed'
+                $path = if ($model.StartsWith('translategemma')) { '/v1/chat/completions' } else { '/api/chat' }
+                Check ($handler.LastPath -eq $path) 'Wrong local protocol'
+            }
+        }
     }
-    $handler.Code = 429
-    Assert-Failure { $service.TranslateAsync('example', 'KO', 'fake-deepl:fx', $none).GetAwaiter().GetResult() } '429'
-    $before = $handler.Calls
-    Assert-Failure { $service.TranslateAsync('example', 'KO', 'fake-deepl:fx', $none).GetAwaiter().GetResult() } '일시 중지'
-    Assert-True ($handler.Calls -eq $before) 'Retry-After ignored'
-} finally { $client.Dispose() }
-Write-Output 'Official API mock: auth, endpoints, JP mapping, usage-only check, empty result, errors, no retry/fallback: PASS'
-
-# Use isolated fixtures; never load or save the real settings file.
-$directory = Join-Path $PSScriptRoot ('../artifacts/tests/local-first-' + [Guid]::NewGuid().ToString('N'))
-[void][IO.Directory]::CreateDirectory($directory)
-$path = Join-Path $directory 'settings.json'
-$store = [Valtrans.Services.SettingsService]::new($path)
-$settings = $store.Load()
-Assert-True ($settings.TranslationProvider -eq 'Hybrid' -and -not $settings.AutoStartDockerDesktop) 'New-install defaults'
-foreach ($provider in @('DeepLX','OpenAI','Hybrid','Ollama','Lite')) {
-    $fixture = @{ SettingsSchemaVersion=21; TranslationProvider=$provider; LocalAiModel='valtrans-hymt2:7b'; AutoStartDockerDesktop=$true; DeepLxMode='Docker'; Hotkey='F8'; ServerRegion='JP'; CustomGlossary=@{abc='custom'} }
-    [IO.File]::WriteAllText($path, ($fixture | ConvertTo-Json -Depth 4))
-    $loaded = $store.Load()
-    $expected = if ($provider -in @('DeepLX','OpenAI')) { 'Hybrid' } else { $provider }
-    Assert-True ($loaded.TranslationProvider -eq $expected -and -not $loaded.AutoStartDockerDesktop) 'Migration defaults'
-    Assert-True ($loaded.LocalAiModel -eq 'valtrans-hymt2:7b' -and $loaded.Hotkey -eq 'F8' -and $loaded.CustomGlossary['abc'] -eq 'custom' -and $loaded.ServerRegion -eq 'JP') 'Migration lost user preference'
-}
-$settings = [Valtrans.Models.AppSettings]::new()
-$settings.ApiKey = 'fake-openai-secret'
-$settings.DeepLApiKey = 'fake-deepl-secret:fx'
-$store.Save($settings)
-$disk = [IO.File]::ReadAllText($path)
-Assert-True (-not $disk.Contains('fake-openai') -and -not $disk.Contains('fake-deepl')) 'Plaintext credential leak'
-$loaded = $store.Load()
-Assert-True ($loaded.ApiKey -eq $settings.ApiKey -and $loaded.DeepLApiKey -eq $settings.DeepLApiKey) 'Keys mixed/lost'
-Assert-True ($loaded.TranslationProvider -eq 'Hybrid') 'Saving key enabled cloud'
-$settings.TranslationProvider = 'DeepL'
-$settings.ApiBaseUrl = 'http://localhost:11434/v1'
-$store.Save($settings)
-Assert-True ($store.Load().TranslationProvider -eq 'DeepL') 'Explicit new cloud choice not preserved'
-Write-Output 'Defaults/migration, retained model/glossary/hotkey, separate encrypted keys, opt-in persisted: PASS'
-
-$rawXaml = Get-Content -LiteralPath "$PSScriptRoot/../MainWindow.xaml" -Raw
-[xml]$xml = $rawXaml
-$namespaces = [Xml.XmlNamespaceManager]::new($xml.NameTable)
-$namespaces.AddNamespace('w', 'http://schemas.microsoft.com/winfx/2006/xaml/presentation')
-$namespaces.AddNamespace('x', 'http://schemas.microsoft.com/winfx/2006/xaml')
-$choices = $xml.SelectNodes('//w:ComboBox[@x:Name="TranslationProviderCombo"]/w:ComboBoxItem', $namespaces)
-Assert-True ($choices[0].Tag -eq 'Hybrid' -and 'DeepLX' -notin $choices.Tag -and 'DeepL' -in $choices.Tag) 'Provider UI mismatch'
-$legacy = $xml.SelectSingleNode('//w:Border[@x:Name="DeepLxPanel"]', $namespaces)
-Assert-True ($legacy.Visibility -eq 'Collapsed' -and $legacy.IsEnabled -eq 'False') 'Legacy Docker UI reachable'
-Write-Output 'Provider UI: local first, official API optional, legacy Docker hidden/disabled: PASS'
-
-$lite = [Valtrans.Services.ValtransLiteService]::new()
-$translator = [Valtrans.Services.TranslatorService]::new([Valtrans.Services.GlossaryService]::new(), [Valtrans.Services.LocalAiService]::new(), $lite)
-$handler = [LocalFirstHttp]::new()
-$client = [Net.Http.HttpClient]::new($handler)
-$apiField = [Valtrans.Services.TranslatorService].GetField('_deepLApi', [Reflection.BindingFlags]'Instance,NonPublic')
-$apiField.SetValue($translator, [Valtrans.Services.DeepLApiService]::new($client))
-try {
-    $handler.Body = '{"translations":[{"text":"섬광 쓸 때까지 기다려"}]}'
-    foreach ($receive in @($false,$true)) {
-        $result = $translator.TranslateAsync('please wait until I flash','KO',$settings,$receive,$none).GetAwaiter().GetResult()
-        Assert-True ($result -eq '섬광 쓸 때까지 기다려') 'Official API send/receive routing'
-        Assert-True ($handler.Auth -eq 'DeepL-Auth-Key fake-deepl-secret:fx') 'OpenAI key sent to DeepL'
+    Check ($handler.Calls -eq 8) 'Wrong local routing count'
+    foreach ($provider in @('OpenAI','DeepL','DeepLX')) {
+        $settings.TranslationProvider = $provider
+        $rejected = $false
+        try { $translator.TranslateAsync('please wait until I flash','KO',$settings,$false,
+                [Threading.CancellationToken]::None).GetAwaiter().GetResult() | Out-Null } catch { $rejected = $true }
+        Check $rejected 'Retired provider not rejected'
     }
-    $before = $handler.Calls
-    $settings.TranslationProvider = 'Hybrid'
-    $translator.TranslateAsync('nt','KO',$settings,$false,$none).GetAwaiter().GetResult() | Out-Null
-    Assert-True ($handler.Calls -eq $before) 'Local rule used cloud'
-} finally { $lite.Dispose(); $client.Dispose() }
-Write-Output 'Send/receive official routing; local rule makes no cloud request: PASS'
+    Check ($handler.Calls -eq 8) 'Retired provider made request'
+    foreach ($example in @(@('제트','Jett'),@('ジェット','Jett'),@('패파','Pathfinder'),@('어센트','Ascent'),@('ヘイヴン','Haven'))) {
+        Check ($glossary.NormalizeNames($example[0],$settings) -eq $example[1]) 'Proper-name dictionary regression'
+    }
+    Check ($glossary.NormalizeLocations('램프',$settings) -eq 'Ramp') 'Map-specific override survived'
+    $prompt = [Valtrans.Services.GameTranslationPrompt]::Build('ジェット Bヘブン','KO',$settings,$glossary,$false)
+    Check ($prompt.Contains('Jett') -and -not $prompt.Contains('Map:')) 'Map context or missing name'
+} finally { $lite.Dispose(); $client.Dispose(); $oldClient.Dispose() }
+Write-Output 'PASS: loopback-only send/receive protocols, retired provider rejection, shared proper-name dictionary'

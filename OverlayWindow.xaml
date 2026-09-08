@@ -9,7 +9,19 @@
         TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="Grayscale"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
   <Grid>
-    <Border x:Name="OverlayRoot" Background="#6011182C" BorderBrush="#704E5D86" BorderThickness="1" CornerRadius="11"
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Border x:Name="MoveBar" Background="#F0202B43" CornerRadius="9,9,0,0" MinHeight="38">
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <Border Background="Transparent" Cursor="SizeAll" Padding="12,8"
+                MouseLeftButtonDown="DragBar_OnMouseLeftButtonDown">
+          <TextBlock Text="⠿  드래그해서 이동" Foreground="White" FontSize="13"/>
+        </Border>
+        <Button Grid.Column="1" Content="완료 · 잠금" Foreground="#0F172A" Background="White"
+                Margin="4" Padding="10,4" Click="FinishMove_OnClick"/>
+      </Grid>
+    </Border>
+    <Border Grid.Row="1" x:Name="OverlayRoot" Background="#6011182C" BorderBrush="#704E5D86" BorderThickness="1" CornerRadius="11"
             PreviewMouseLeftButtonDown="DragBar_OnMouseLeftButtonDown">
       <Grid>
         <ScrollViewer VerticalScrollBarVisibility="Hidden" Padding="15,10">
@@ -27,7 +39,7 @@
         </ScrollViewer>
       </Grid>
     </Border>
-    <ResizeGrip x:Name="ResizeHandle" Width="24" Height="24" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+    <ResizeGrip Grid.Row="1" x:Name="ResizeHandle" Width="36" Height="36" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                 Cursor="SizeNWSE" Background="Transparent" ToolTip="드래그해서 크기 조절"
                 PreviewMouseLeftButtonDown="ResizeHandle_OnMouseLeftButtonDown">
       <ResizeGrip.Template>

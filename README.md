@@ -7,7 +7,7 @@
 공식 Discord 서버에 참여할 수 있습니다: [Valtrans 공식 Discord](https://discord.gg/GMYuAJ8bZ2)<br>
 Join our official Discord server: [Valtrans Official Discord](https://discord.gg/GMYuAJ8bZ2)
 
-> **작성 기준 버전 / Documentation baseline: v0.1.0-beta**<br>
+> **작성 기준 버전 / Documentation baseline: v0.1.1-beta**<br>
 > **작성 기준일 / Last reviewed: 2026-09-08**<br>
 > 이 README는 위 버전의 사용법을 기준으로 작성되었습니다. 프로그램 버전이 올라가더라도 사용법이 변하지 않으면 README는 업데이트되지 않을 수 있습니다. 문서의 기준 버전과 설치된 앱 버전이 달라도 사용법은 동일할 수 있습니다.  
 > This README describes usage as of the version above. It may not be updated for every application release if the instructions remain unchanged. A different documentation version does not necessarily mean the instructions are outdated.
@@ -25,6 +25,7 @@ Valtrans는 VALORANT와 Apex Legends에서 사용할 수 있는 Windows용 채�
 
 - **보내는 채팅:** 게임 채팅창에 쓴 문장을 단축키로 번역하고 입력 내용을 교체합니다.
 - **받는 채팅:** 지정한 화면 영역을 Windows OCR로 읽고 번역문을 별도 오버레이에 표시합니다.
+- **선택형 고정확도 OCR:** `채팅 대시보드 → OCR 설정 · 진단 → OCR 엔진 · 고정확도 실험`에서 PaddleOCR-VL을 설치·준비하고 선택할 수 있습니다. 기본값은 Windows OCR이며, Paddle은 별도 GPU 메모리 약 2GB와 수 초의 처리 시간이 필요할 수 있습니다. [설치·사용 가이드](Ocr/README.md)
 - **지원 번역 언어:** 한국어(KO), 영어(EN), 일본어(JP).
 - **기본 번역 방식:** 무료 로컬 AI 우선 + Lite 대체. 처음 사용하는 기본 모델은 Hy-MT2 1.8B입니다.
 
@@ -49,8 +50,8 @@ Windows 10/11과 **.NET 10 Desktop Runtime**이 필요합니다. 로컬 AI를 �
 
 | 메뉴 | 할 수 있는 일 |
 | --- | --- |
-| 채팅 대시보드 | 보내는 채팅 언어·단축키, 게임·맵·OCR 영역, 원문 언어, OCR와 오버레이 켜기/끄기 |
-| 번역 엔진 | 번역 방식·로컬 모델 선택, 설치·예열, 선택형 API 키 입력 |
+| 채팅 대시보드 | 보내는 채팅 언어·단축키, 게임·자동 OCR 영역, 원문 언어, OCR와 오버레이 켜기/끄기 |
+| 번역 엔진 | 로컬 모델 선택, 설치·예열 |
 | 오버레이 설정 | 이동 잠금, 표시 시간, 배경·테두리 투명도, 글자 크기, OCR 필터·안정화 |
 | 번역 테스트 · 사전 | 게임 없이 번역 시험, 처리 경로 확인, 팀 전용 사전 편집 |
 | 시작 가이드 · 점검 | 준비 상태 확인, 권장 설정, 자동 복구, 진단 저장 |
@@ -74,53 +75,55 @@ Windows 10/11과 **.NET 10 Desktop Runtime**이 필요합니다. 로컬 AI를 �
 
 ### 5. 팀원 채팅을 OCR로 번역하기
 
-#### 언어와 게임 선택
+1. VALORANT 또는 Apex Legends를 실행합니다.
+2. **채팅 대시보드 → 받는 채팅 · OCR**에서 게임과 원문 언어(EN/JP/KO), 출력 언어를 확인합니다.
+3. 영역은 게임 화면의 크기와 위치로 자동 계산됩니다. **OCR 영역 표시**로 확인하고, 필요하면 **추천 영역 새로고침**을 누릅니다.
+4. **OCR 테스트**로 인식 원문과 시스템·닉네임을 제외한 본문을 확인합니다. Windows 언어팩이 없으면 **언어팩**으로 설치합니다.
+5. **OCR 시작**을 누른 뒤 새 채팅으로 테스트합니다. 시작 당시 보이던 채팅은 기준 화면으로 생략될 수 있습니다.
 
-1. **채팅 대시보드 → 받는 채팅 · OCR**에서 게임과 맵을 선택합니다.
-2. **원문** 체크박스에서 읽고 싶은 언어를 선택합니다. 여러 언어를 동시에 선택할 수 있습니다.
-3. **출력**에서는 번역 결과를 볼 언어 하나를 선택합니다.
+수동 영역 선택·보정 마법사·최신 영역 선택·맵 선택은 제거했습니다. 예전 수동 영역 대신 자동 추천값을 적용합니다. 게임 창 이동·해상도 변경도 자동 반영합니다.
 
-예: 영어·일본어 채팅을 한국어로 보려면 **원문 EN + JP**, **출력 한국어**로 설정합니다. 여기서 원문은 상대가 쓴 언어이고, 출력은 내가 읽을 언어입니다.
+#### 발로란트 추천 영역
 
-#### OCR 영역 지정
-
-1. 게임을 실행하고 채팅이 실제로 보이게 합니다.
-2. **추천 영역**으로 시작하거나 **직접 선택**으로 채팅 메시지 영역을 지정합니다.
-3. 채팅 본문이 들어오도록 잡되, 움직이는 배경·메뉴·입력창 등 불필요한 부분은 가능한 한 줄입니다.
-4. **OCR 테스트**로 실제 인식된 글자를 확인합니다.
-5. 글자가 잘리거나 다른 화면 요소가 섞이면 **영역 보정**에서 위치와 크기를 조정합니다.
-6. 설정을 저장하고 **OCR 시작**, **오버레이 켜기**를 누릅니다.
-
-영역은 게임·해상도별로 저장됩니다. **전면 게임에 맞춰 OCR 영역·맵 프로필 자동 전환**을 켜면 해당 게임의 저장 프로필을 사용합니다. 해상도, 창 모드, Windows 배율을 바꾼 뒤에는 영역을 다시 확인하세요.
-
-**발로란트 추천값:** 최근 메시지 부분을 읽고 하단 입력줄을 제외하는 초기 영역입니다. 게임 실행 후 **추천 영역 → OCR 테스트 → 영역 보정** 순서로 확인하세요. 기존 저장값은 업데이트만으로 변경되지 않으며, 추천 영역을 누르면 현재 프로필에 새 추천값이 저장됩니다.
+제공된 3837×2157 화면을 참고한 16:9 초기값입니다. 게임 창 내부 기준으로 **가로 1.25~24%, 세로 72.5~95.2%**를 읽어 펼친 채팅을 포함하고 하단 입력줄은 제외합니다.
 
 | 게임 해상도 | 왼쪽 X / 위쪽 Y | 너비 × 높이 |
 |---|---|---|
-| 1280×720 | 5 / 600 | 320×96 |
-| 1920×1080 | 8 / 900 | 480×144 |
-| 2560×1440 | 11 / 1200 | 640×192 |
-| 3840×2160 | 16 / 1800 | 960×288 |
+| 1280×720 | 16 / 522 | 291×163 |
+| 1920×1080 | 24 / 783 | 437×245 |
+| 2560×1440 | 32 / 1044 | 582×327 |
+| 3840×2160 | 48 / 1566 | 874×490 |
 
-좌표는 게임 화면 왼쪽 위 기준의 픽셀입니다. 다른 해상도는 높이에 비례해 계산합니다. 제공된 16:9 채팅 화면을 참고한 초기값으로, 실게임에서 모든 해상도를 검증한 값은 아닙니다. 긴 줄·채팅창 열림/닫힘·화면 비율에 따라 직접 보정하세요. 닉네임은 영역에 포함하고 인식 후 본문과 분리합니다.
+좌표는 게임 창 내부의 물리 픽셀 기준이며 Windows 배율을 다시 곱하지 않습니다. 게임을 찾지 못한 동안의 영역 표시는 현재 모니터 기준 미리보기입니다. 긴 줄·다른 화면 비율·레터박스에서는 범위가 맞지 않을 수 있습니다. 모든 해상도의 실게임 검증값은 아니므로 문제가 있으면 화면과 해상도를 함께 제보해 주세요.
+
+#### OCR 설정 · 진단
+
+- 관련 기능은 대시보드의 **OCR 설정 · 진단** 한곳에 모았습니다.
+- **채팅 필터 · OCR 세부 조정:** 브리핑만/잡담도 번역, 안정화, 작은 글자 확대·대비 보정, 두 프레임 합의.
+- **OCR 엔진 · 고정확도 실험:** 기본 Windows OCR 또는 선택형 PaddleOCR-VL. Paddle 설치·준비·메모리 해제는 [설치 가이드](Ocr/README.md)를 참고하세요.
+- **OCR 처리 상세:** 인식·필터·번역 경로를 표시하며, 최근 상태 8개만 메모리에 유지합니다.
+- Windows OCR은 최신 부분(전체 하단 35%)과 전체 영역을 자동으로 확인합니다. 최신 부분에 변화가 없으면 전체 OCR을 줄이고 약 10초 주기로 다시 확인합니다. 별도 이중 영역 설정은 없습니다.
+- Paddle은 전체 영역을 한 번 읽으며 Windows 전처리·이중 영역·두 프레임 합의를 겹쳐 사용하지 않습니다.
+- 번역 완료 즉시 한 줄씩 표시합니다. 대기 최대 8줄, 대기 20초 만료, 한 줄 처리 15초 취소이며 한 줄 실패가 뒤의 번역을 막지 않습니다.
 
 #### 정상적으로 생략되는 경우
 
-- OCR 시작 시 이미 떠 있던 채팅은 기준 화면으로 사용하므로 바로 번역되지 않을 수 있습니다. **새 채팅으로 확인하세요.**
-- 이미 번역한 과거 채팅, 목표 언어로 적힌 문장, 시스템 문구 등은 생략할 수 있습니다.
-- 채널명과 닉네임은 본문 판정에서 제외합니다. 예: `(파티) Player: watch left`.
-- **브리핑만** 필터에서는 긴 잡담이나 불평이 제외될 수 있습니다. 필요하면 **오버레이 설정 → OCR 채팅 필터 → 잡담도 번역**을 선택합니다.
-- 화면에 변화가 없으면 OCR 작업을 줄입니다. 같은 문장을 계속 표시하지 않는 것은 정상 동작일 수 있습니다.
+- 시작 당시 보이던 채팅, 이미 처리한 채팅, 출력 언어와 같은 본문, 시스템 문구.
+- 채널과 닉네임은 본문에서 분리합니다. 자신의 메시지라는 이유만으로 제외하지 않습니다.
+- 브리핑 필터가 잡담을 숨길 수 있습니다. 테스트할 때는 **잡담도 번역**으로 비교하세요.
+- 화면에 변화가 없을 때 OCR과 번역을 반복하지 않는 것은 정상 동작입니다.
 
 ### 6. 오버레이 조절하기
 
+영역 선택 버튼 옆의 **OCR 영역 표시**를 누르면 현재 캡처 범위를 하늘색 테두리로 확인할 수 있습니다. 영역을 바꾸거나 게임 클릭을 막지 않으며, 다시 누르면 숨깁니다. 표시 중에는 저장 프로필 변경을 따라가고, 앱을 재시작하면 꺼집니다.
+
 **오버레이 설정**에서 다음 항목을 바꿀 수 있습니다.
 
-- **이동·크기:** **클릭 통과 · 이동/크기 잠금**을 해제하고 오버레이의 이동 영역을 드래그합니다. 크기 조절 손잡이로 크기를 바꿉니다. 배치가 끝나면 다시 잠그면 게임 클릭을 방해하지 않습니다.
+- **이동·크기:** **오버레이 위치 · 크기 조정**을 누르고 상단 이동 바를 드래그합니다. 오른쪽 아래 손잡이로 크기를 바꿉니다. **완료 · 잠금**을 누르면 위치를 저장하고 이동 바를 숨기며 게임 클릭을 다시 통과시킵니다. 배경이 완전히 투명해도 이동 중에는 잡을 영역이 임시로 표시됩니다.
 - **표시 시간:** 5·10·15·30·60초 또는 **계속 표시**. 기본은 15초입니다.
 - **배경·테두리 투명도:** 각각 0~100%. 숫자가 높을수록 더 투명합니다.
 - **글자 크기:** 11~32px.
-- **OCR 채팅 안정화:** 먼저 **균형**을 사용하고, 문자가 흔들리거나 잘리면 안정 쪽으로 조정합니다. 기다리는 시간이 늘어날 수 있습니다.
+- **OCR 안정화는 대시보드 → OCR 설정 · 진단에서:** 먼저 **균형**을 사용하고, 문자가 흔들리거나 잘리면 안정 쪽으로 조정합니다. 기다리는 시간이 늘어날 수 있습니다.
 
 **작은 글자 자동 확대·대비 보정**, **두 프레임 합의**는 인식 흔들림을 줄이기 위한 옵션입니다. 성능과 인식 품질은 게임 화면에 따라 달라집니다.
 
@@ -133,21 +136,14 @@ Windows 10/11과 **.NET 10 Desktop Runtime**이 필요합니다. 로컬 AI를 �
 | 무료 로컬 · AI 우선 + Lite 대체 | 기본값. 확실한 약어·콜은 사전으로 처리하고 선택한 AI가 실패하면 Lite를 시도합니다. |
 | 로컬 AI | Hy-MT2 / Qwen / TranslateGemma 중 선택합니다. 큰 모델은 더 많은 자원을 사용하며 항상 더 정확한 것은 아닙니다. |
 | Valtrans Lite | CPU INT8 경량 번역. 일본어↔한국어는 영어를 거쳐 품질 손실이 생길 수 있습니다. |
-| DeepL 공식 API | 선택 사항. 별도 API 키가 필요하며 계정별 한도·요금이 적용됩니다. |
-| GPT-4o mini | 선택 사항. OpenAI API 키와 서비스 이용 조건 확인이 필요합니다. |
 
 로컬 모델을 바꿀 때는 모델 선택 → **로컬 AI 설치** → **예열 상태 확인** → **설정 저장** 순서로 진행합니다. 설치된 모델은 준비 상태를 확인하세요. Lite만 사용할 때는 **Valtrans Lite 준비**를 사용합니다.
 
 Lite는 깨진 출력·반복·미번역·일부 의미 누락을 검사합니다. **Lite 번역 확인 필요**는 의심 결과를 보류했다는 뜻이며, 사용량 차단을 뜻하지 않습니다. 검사 통과도 번역 정확도를 보장하지는 않습니다.
 
-**선택형 API 사용:**
+**로컬 전용:** 외부 LLM/DeepL API 입력·연결·번역과 DLX/Docker 준비 기능을 제거했습니다. 예전 외부 엔진은 로컬 기본값으로 전환하며 API 키는 다음 설정 저장부터 제외됩니다. 설치된 Docker·WSL 자체는 삭제하지 않습니다.
 
-1. 사용할 API 엔진을 직접 선택합니다.
-2. 해당 서비스의 API 전용 키를 입력합니다. 발급 안내는 앱의 안내 버튼을 사용합니다.
-3. DeepL은 **키·사용량 확인**, OpenAI는 **연결 확인**을 누릅니다.
-4. **설정 저장** 후 번역 테스트로 확인합니다.
-
-DeepL의 키 확인은 번역 없이 사용량만 조회하지만, 번역 테스트나 엔진 호환성 검사는 실제 번역 요청을 보냅니다. API 사용량이 발생할 수 있습니다. DeepL 키가 `:fx`로 끝나면 무료 API 주소, 그 외에는 Pro 주소를 사용합니다. 자동으로 유료 키나 공개 서버로 전환하지 않습니다.
+맵별 위치 사전 전환 없이 기본 고유명사 사전을 공통 적용합니다. 예: 제트/ジェット → Jett, 패파 → Pathfinder, 어센트/アセント → Ascent. 맵 이름은 [Riot 공식 안내](https://playvalorant.com/ko-kr/maps/)를 참고했습니다.
 
 ### 8. 번역 테스트와 팀 전용 사전
 
@@ -177,20 +173,18 @@ DeepL의 키 확인은 번역 없이 사용량만 조회하지만, 번역 테스
 | 프로그램이 실행되지 않음 | .NET 10 Desktop Runtime과 배포 폴더의 동봉 파일을 확인합니다. |
 | 단축키를 눌러도 교체되지 않음 | 지원 게임이 전면인지, 채팅 입력창이 열렸는지, 단축키 충돌과 목표 언어를 확인합니다. |
 | OCR 번역이 나오지 않음 | OCR 시작·오버레이 켜짐·원문 언어·영역·언어팩·필터를 확인하고 새 채팅으로 시험합니다. |
-| 한 줄을 엉뚱하게 읽음 | OCR 테스트 → 영역 보정 순서로 확인합니다. 영역이 너무 넓지 않은지 봅니다. |
+| 한 줄을 엉뚱하게 읽음 | OCR 영역 표시 → OCR 테스트로 확인하고 다른 OCR 엔진과 비교합니다. |
 | 오버레이를 옮길 수 없음 | 클릭 통과·이동/크기 잠금을 해제합니다. |
 | 로컬 번역이 처음에 느림 | 모델 예열이 끝났는지 확인합니다. 큰 모델 대신 작은 모델로 비교해 봅니다. |
 | Lite 결과가 보류됨 | 로컬 AI 또는 기본 복합 모드로 같은 원문을 시험합니다. 부정·숫자·방향을 직접 확인하세요. |
-| API 연결 오류 | API 키, 해당 계정의 한도, 인터넷 연결을 확인하거나 무료 로컬 모드로 돌아갑니다. |
 
 해결되지 않으면 **시작 가이드 · 점검 → 전체 점검**을 실행합니다. **자동 복구**는 안내된 설치·프로필 문제에 사용하고, **진단 저장**으로 상태 자료를 남길 수 있습니다.
 
 ### 10. 데이터와 주의 사항
 
 - 설정과 Lite 파일은 `%LOCALAPPDATA%\Valtrans`에 저장됩니다. Ollama 모델은 Ollama의 별도 저장소를 사용합니다.
-- API 키는 현재 Windows 사용자 계정으로 암호화하며 서비스별로 따로 보관합니다. 키를 저장하는 것만으로 외부 번역이 켜지지는 않습니다.
-- 로컬 엔진은 채팅을 외부 번역 서버로 보내지 않습니다. API 엔진을 선택하면 해당 서비스로 전송됩니다.
-- 현재 UI에서는 DLX·Docker 설치 설정을 제공하지 않으며 Docker를 자동 실행하지 않습니다.
+- 번역 엔진은 로컬 전용이며 채팅을 외부 번역 서버로 보내지 않습니다.
+- DLX·Docker 준비와 외부 번역 API 연결 코드를 제거했습니다.
 - 번역·OCR은 틀릴 수 있습니다. 부정, 방향, 인원, 은어, 복합 문장은 특히 주의하세요. [품질 참고](docs/translation-quality.md)
 
 ---
@@ -231,8 +225,8 @@ The interface currently uses Korean labels. English explanations below include t
 
 | Menu label | Purpose |
 | --- | --- |
-| 채팅 대시보드 | Outgoing language/hotkey, game/map, OCR region and languages, OCR/overlay controls |
-| 번역 엔진 | Engine/model selection, installation, warm-up, optional API credentials |
+| 채팅 대시보드 | Outgoing language/hotkey, game, automatic OCR region and languages, OCR/overlay controls |
+| 번역 엔진 | Local model selection, installation and warm-up |
 | 오버레이 설정 | Position lock, display duration, background/border transparency, font size, OCR filtering |
 | 번역 테스트 · 사전 | Translation tests, processing routes, custom team glossary |
 | 시작 가이드 · 점검 | Setup status, recommended settings, repair, diagnostic export |
@@ -254,53 +248,52 @@ If the message is already in the target language, it may remain unchanged. Pause
 
 ### 5. Translating incoming chat with OCR
 
-#### Select languages
+1. Launch VALORANT or Apex Legends.
+2. In **받는 채팅 · OCR**, check the game, source languages (EN/JP/KO) and output language.
+3. The crop follows the game client's size and position automatically. Check **OCR 영역 표시** (Show region); use **추천 영역 새로고침** (Refresh recommendation) if needed.
+4. Use **OCR 테스트** to inspect the recognized text and extracted message bodies. Install missing Windows OCR packs through **언어팩**.
+5. Click **OCR 시작** and send a new message. Chat already visible at startup may become the baseline and be skipped.
 
-1. In **받는 채팅 · OCR** (Incoming chat/OCR), select your game and map.
-2. Select the languages to recognize under **원문** (Source). Multiple selections are allowed.
-3. Select one translation language under **출력** (Output).
+Manual crop selection/calibration, latest-region selection and map selection were removed. Automatic recommendations supersede old manual crops and follow game-window movement and resolution changes.
 
-For English and Japanese chat translated into Korean, select **EN + JP** as source languages and **한국어** as output. Source languages describe what teammates write; output is what you want to read.
+#### VALORANT preset
 
-#### Set the capture region
-
-1. Run the game and make some chat messages visible.
-2. Use **추천 영역** (Recommended region), or **직접 선택** (Select manually).
-3. Include the message text while excluding unnecessary moving backgrounds, menus, and the chat input area where possible.
-4. Click **OCR 테스트** (OCR test) to inspect the recognized text.
-5. Use **영역 보정** (Region calibration) if text is clipped or unrelated UI is included.
-6. Save settings, then click **OCR 시작** (Start OCR) and **오버레이 켜기** (Show overlay).
-
-Regions are saved by game and resolution. The automatic foreground-game profile option loads the matching saved region and map. Recheck the region after changing resolution, window mode, or Windows scaling.
-
-**VALORANT preset:** a starting region for recent messages, leaving a margin below for the input row. Use **추천 영역 → OCR 테스트 → 영역 보정** (Recommended region → OCR test → Region calibration). Updating the app does not migrate saved regions; clicking Recommended region saves the new preset to the current profile.
+Based on the supplied 3837×2157 screenshot: **X 1.25–24%, Y 72.5–95.2%** of the game client. This covers expanded chat while excluding the input row.
 
 | Game resolution | Left X / top Y | Width × height |
 |---|---|---|
-| 1280×720 | 5 / 600 | 320×96 |
-| 1920×1080 | 8 / 900 | 480×144 |
-| 2560×1440 | 11 / 1200 | 640×192 |
-| 3840×2160 | 16 / 1800 | 960×288 |
+| 1280×720 | 16 / 522 | 291×163 |
+| 1920×1080 | 24 / 783 | 437×245 |
+| 2560×1440 | 32 / 1044 | 582×327 |
+| 3840×2160 | 48 / 1566 | 874×490 |
 
-Coordinates are pixels relative to the game client area's top-left corner. Other resolutions scale by height. These starting values are based on the supplied 16:9 screenshots, not in-game validation at every resolution. Check long lines, open/closed chat, and non-16:9 layouts manually. Keep nicknames inside the capture region; the text parser separates them afterward.
+Coordinates are physical client pixels; Windows scaling is not applied twice. Without a detected game, the outline is a current-monitor preview. Long lines, other aspect ratios and letterboxing may need a revised preset. These are not in-game validation results at every resolution; report your screenshot and resolution if the crop is wrong.
 
-#### Messages that may be skipped normally
+#### OCR settings and diagnostics
 
-- Messages visible when OCR starts may be treated as the initial baseline. **Test with a new message.**
-- Previously processed chat, text already in the output language, and system messages may be skipped.
-- Channel labels and nicknames are separated from the message body.
-- **브리핑만** (Briefings only) may filter long casual messages or complaints. For broader coverage, select **잡담도 번역** (Include casual chat) in the OCR chat filter.
-- OCR work is reduced when the screen does not change. Repeatedly translating the same visible message is intentionally avoided.
+- **OCR 설정 · 진단** groups all OCR-specific options on the dashboard.
+- Filter/stabilization controls, small-text enhancement and two-frame agreement are under **채팅 필터 · OCR 세부 조정**.
+- Windows OCR is the default. Optional PaddleOCR-VL installation, preparation and memory-release controls are under the experimental engine section; see the [OCR guide](Ocr/README.md).
+- **OCR 처리 상세** keeps the latest eight processing-status entries in memory, without chat text.
+- Windows automatically checks the latest portion (bottom 35%) and full panel, reducing full OCR when unchanged and checking again roughly every 10 seconds. No dual-region setup is needed.
+- Paddle reads the full crop once without Windows preprocessing, dual-region or two-frame checks.
+- Translations appear per completed line. Up to eight lines wait, queued lines expire after 20 seconds, and active lines have a 15-second deadline. One failure does not discard following lines.
+
+#### Normal exclusions
+
+Startup baseline, previously processed messages, system text and text already in the output language may be skipped. Channel labels and nicknames are separated from the body; your own messages are not excluded solely because you sent them. Briefing mode may hide casual chat—compare **잡담도 번역** (Include casual chat) while testing. Unchanged frames intentionally avoid repeated OCR and translation.
 
 ### 6. Adjusting the overlay
 
+Use **OCR 영역 표시** (Show OCR region) beside the region refresh button to outline the current capture area in cyan. It does not change the region or intercept clicks. Click again to hide it; the outline follows game-window changes and is not retained after app restart.
+
 Open **오버레이 설정** (Overlay settings).
 
-- **Move and resize:** uncheck **클릭 통과 · 이동/크기 잠금** (Click-through and position/size lock). Drag the overlay's move area or use its resize handle. Lock it again afterward so clicks pass through to the game.
+- **Move and resize:** click **오버레이 위치 · 크기 조정** (Adjust overlay position/size). Drag the top move bar or the bottom-right resize handle. Click **완료 · 잠금** (Done / lock) to save the position, hide the bar, and restore click-through. A temporary hit area is shown during editing even with a fully transparent background.
 - **Display duration:** 5, 10, 15, 30, or 60 seconds, or **계속 표시** (Keep visible). The default is 15 seconds.
 - **Background and border transparency:** independently adjustable from 0 to 100%. Higher values are more transparent.
 - **Font size:** 11–32px.
-- **OCR stabilization:** start with **균형** (Balanced). More stable settings can help unsettled text but add waiting time.
+- **OCR stabilization is under Dashboard → OCR settings/diagnostics:** start with **균형** (Balanced). More stable settings can help unsettled text but add waiting time.
 
 Small-text enhancement and two-frame agreement can reduce recognition instability. Their impact depends on the game screen.
 
@@ -313,21 +306,14 @@ Use **오버레이 끄기** to hide the overlay. Use **OCR 중지** to stop OCR 
 | Free local AI first + Lite fallback | Default. Exact known expressions use rules; other text uses the selected AI, with Lite attempted if AI fails. |
 | Local AI | Choose Hy-MT2, Qwen, or TranslateGemma. Larger models use more resources and are not always more accurate. |
 | Valtrans Lite | Lightweight CPU INT8 translation. Japanese/Korean translation goes through English and may lose meaning. |
-| DeepL official API | Optional API key; account limits and pricing apply. |
-| GPT-4o mini | Optional OpenAI API engine; review the service's usage conditions and billing. |
 
 For a local model, select it, click **로컬 AI 설치** (Install local AI), check **예열 상태 확인** (Warm-up status), then save settings. For Lite-only setup, use **Valtrans Lite 준비**.
 
 **Lite 번역 확인 필요** means a suspicious Lite output was withheld, not that you were rate-limited. Its checks cannot establish that every accepted translation is correct.
 
-**Optional API setup:**
+**Local only:** external LLM/DeepL API inputs, connection tests, translation routes and DLX/Docker setup were removed. Old cloud selections migrate to the local default, and retired keys are omitted on the next settings save. Installed Docker/WSL programs are not uninstalled.
 
-1. Explicitly select the API engine.
-2. Enter that service's API key using the in-app key guide if needed.
-3. Use **키·사용량 확인** for DeepL, or **연결 확인** for OpenAI.
-4. Save settings and try a translation test.
-
-DeepL's key check only queries usage. Translation tests and engine compatibility checks send actual translation requests and may consume your allowance. A DeepL key ending in `:fx` uses the Free API endpoint; other keys use the Pro endpoint. The app does not automatically switch to a paid key or public relay.
+A shared proper-name dictionary replaces selected-map overrides: 제트/ジェット → Jett, 패파 → Pathfinder, 어센트/アセント → Ascent. Map spellings follow [Riot's directory](https://playvalorant.com/en-us/maps/).
 
 ### 8. Testing and the custom glossary
 
@@ -353,20 +339,18 @@ For example, `제트=Jett` specifies a preferred character-name spelling. Avoid 
 | App will not start | Confirm the .NET 10 Desktop Runtime and all accompanying distribution files are present. |
 | Hotkey does not replace text | Check the foreground game, open chat input, hotkey conflicts, and target language. |
 | No incoming translation | Check OCR/overlay switches, source languages, region, language packs, and filter; test a new message. |
-| Incorrect OCR text | Run OCR test, then region calibration; avoid an oversized capture area. |
+| Incorrect OCR text | Check the region outline, OCR test and optional experimental OCR engine. |
 | Overlay cannot move | Disable click-through and position/size lock. |
 | First local translation is slow | Wait for warm-up. Compare a smaller model if resources are limited. |
 | Lite output is withheld | Try the local AI or default hybrid engine and review directions, numbers, and negation. |
-| API connection fails | Check the key, account allowance, and internet access, or return to free local mode. |
 
 For further checks, open **시작 가이드 · 점검 → 전체 점검**. Use **자동 복구** (Automatic repair) for the reported setup/profile issues, or **진단 저장** (Export diagnostics) to save status information.
 
 ### 10. Data and limitations
 
 - Settings and Lite files are stored under `%LOCALAPPDATA%\Valtrans`. Ollama manages its own model storage.
-- API keys are encrypted for the current Windows user and stored separately by service. Saving a key alone does not activate cloud translation.
-- Local engines do not send chat to an external translation server. Selecting an API engine sends text to that service.
-- The current interface does not offer DLX/Docker setup and does not automatically start Docker.
+- Translation engines are local only; chat is not sent to external translation services.
+- DLX/Docker setup and external translation API code have been removed.
 - OCR and translation can be wrong, especially for negation, directions, counts, slang, and complex sentences. [Quality notes, in Korean](docs/translation-quality.md)
 
 ---

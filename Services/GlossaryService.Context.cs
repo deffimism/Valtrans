@@ -27,8 +27,8 @@ public sealed partial class GlossaryService
         }
         foreach (var pair in settings.CustomGlossary.OrderByDescending(p => p.Key.Length))
             Add(pair.Key, pair.Value, "user terminology");
-        foreach (var pair in CharacterNames) Add(pair.Key, pair.Value, "official character name");
-        foreach (var name in CharacterNames.Values.Distinct()) Add(name, name, "official character name; keep spelling");
+        foreach (var pair in ProperNames) Add(pair.Key, pair.Value, "proper name");
+        foreach (var name in ProperNames.Values.Distinct()) Add(name, name, "proper name; keep spelling");
         foreach (var pair in SelectedLocations(settings))
         {
             var localized = LocalizeCalloutLocation(pair.Value, target, settings);

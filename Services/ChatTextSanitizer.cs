@@ -11,8 +11,16 @@ public static class ChatTextSanitizer
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     private static readonly Regex SystemLine = new(
-        @"^\s*(?:[\(\[\{<＜【（]\s*)?(?:system|notice|시스템|알림|공지|システム|通知|お知らせ)(?:\s*[\)\]\}>＞】）]|\s*[:：﹕꞉∶])",
+        @"^\s*(?:[\(\[\{<＜【（]\s*)?(?:system|notice|broadcast|시스템|알림|공지|방송|システム|通知|お知らせ)(?:\s*[\)\]\}>＞】）]|\s*[:：﹕꞉∶])",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    private static readonly Regex InputLine = new(
+        @"^\s*(?:team|party|all|squad|팀|파티|전체|분대|チーム|パーティー?|全体)\s*[:：﹕꞉∶]",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    private static readonly Regex OcrHeader = new(
+        @"^(?:[（(][^():\r\n]{1,12}[）)]|[）)])\s*[\p{L}\p{N}][\p{L}\p{N} ._#-]{0,24}\s*[:：]\s*",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex SimpleNickname = new(
         @"^[\p{L}\p{N}][\p{L}\p{N}\s._#\-\[\]\(\)]{0,47}$",
@@ -60,6 +68,24 @@ public static class ChatTextSanitizer
 
     public static string MessageBodies(string text) => ContentForLanguageDetection(text);
 
+    // Windows OCR separates Japanese glyphs into words ("ミ ッ ド 2").
+    // Join only Japanese-adjacent gaps; do not remove spaces from Latin chat.
+    public static bool IsSystemMessage(string text) => SystemLine.IsMatch(text);
+
+    public static bool HasChatChannel(string text) => ChannelPrefix.IsMatch(text);
+
+    public static string NormalizeOcrBody(string text)
+    {
+        // Standalone date/input labels, not a sender's message saying "today".
+        if (text.Trim() is "오늘" or "Today" or "今日" || InputLine.IsMatch(text) || IsSystemMessage(text)) return "";
+        var header = OcrHeader.Match(text.Trim());
+        var body = header.Success ? text.Trim()[header.Length..] : StripChatPrefix(text);
+        if (!body.Any(char.IsLetterOrDigit)) return "";
+        return Regex.Replace(body,
+        @"(?<=[\u3040-\u30ff])\s+(?=[\u3040-\u30ff\u3400-\u9fff0-9])|(?<=[\u3400-\u9fff0-9])\s+(?=[\u3040-\u30ff])", "",
+        RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    }
+
     public static bool HasMeaningfulContent(string text)
     {
         text = ContentForLanguageDetection(text).Trim();
@@ -93,14 +119,14 @@ public static class ChatTextSanitizer
         {
             var prefix = line[..separator].Trim();
             var body = line[(separator + 1)..].Trim();
-            if (body.Length > 0 && IsLikelyChatHeader(prefix, hasChannel)) return body;
+            if (IsLikelyChatHeader(prefix, hasChannel)) return body;
         }
 
         // Windows OCR sometimes recognizes ':' as ';' or '；'. Only trust this weaker
         // separator when a known game channel marker is present.
         if (hasChannel)
         {
-            var weakSeparator = line.IndexOfAny(new[] { ';', '；', '|' }, channelMatch.Length);
+            var weakSeparator = line.IndexOfAny(new[] { ';', '；', '|', '•', '·', '・' }, channelMatch.Length);
             if (weakSeparator > channelMatch.Length)
             {
                 var body = line[(weakSeparator + 1)..].Trim();

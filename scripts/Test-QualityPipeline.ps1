@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -Path (Resolve-Path -LiteralPath $AssemblyPath)
 $glossary = [Valtrans.Services.GlossaryService]::new()
 $settings = [Valtrans.Models.AppSettings]::new()
-$settings.Game = 'VALORANT'; $settings.Map = 'Ascent'; $settings.ServerRegion = 'JP'
+$settings.Game = 'VALORANT'; $settings.ServerRegion = 'JP'
 $staticFlags = [Reflection.BindingFlags]'Static,NonPublic'
 $templateMethod = [Valtrans.Services.LocalAiService].GetMethod('HyMtChatTemplate', $staticFlags)
 $stopsMethod = [Valtrans.Services.LocalAiService].GetMethod('HyMtStopTokens', $staticFlags)
@@ -16,10 +16,10 @@ Write-Output 'Separate Hy-MT2 1.8B/7B templates and stop tokens: PASS'
 $settings.CustomGlossary['pizza'] = '피자'
 $settings.CustomGlossary['irrelevant'] = 'should not be included'
 $prompt = [Valtrans.Services.GameTranslationPrompt]::Build('save me near pizza, not mid', 'KO', $settings, $glossary, $false)
-foreach ($required in @('VALORANT', 'Ascent', 'Japan', 'save me near pizza, not mid', 'no character limit')) {
+foreach ($required in @('VALORANT', 'Japan', 'save me near pizza, not mid', 'no character limit')) {
     if (-not $prompt.Contains($required)) { throw "Missing prompt context: $required" }
 }
-if ($prompt.Contains('irrelevant') -or $prompt.Contains('{{VT') -or $prompt.Contains('35 characters')) { throw 'Unsafe/unrelated prompt preprocessing' }
+if ($prompt.Contains('Map:') -or $prompt.Contains('irrelevant') -or $prompt.Contains('{{VT') -or $prompt.Contains('35 characters')) { throw 'Unsafe/unrelated prompt preprocessing' }
 $settings.CustomGlossary.Clear()
 if ([Valtrans.Services.GameTranslationPrompt]::NormalizeRegion('unknown') -ne 'Auto') { throw 'Invalid region accepted' }
 foreach ($source in @('not left, right if clear', 'do not push left, go right', '2 left, 1 right if clear')) {

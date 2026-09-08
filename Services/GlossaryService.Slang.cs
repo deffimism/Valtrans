@@ -140,7 +140,7 @@ public sealed partial class GlossaryService
                 expansions[alias] = phrase.En;
         // "cracked" in an ordinary sentence can be praise. Only anchored callouts expand it.
         foreach (var term in ContextSensitiveTerms) expansions.Remove(term);
-        foreach (var name in CharacterNames.Values.Concat(settings.CustomGlossary.Values))
+        foreach (var name in ProperNames.Values.Concat(settings.CustomGlossary.Values))
             expansions[name] = name;
         var pattern = string.Join("|", expansions.Keys.OrderByDescending(key => key.Length).Select(TermPattern));
         return (new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), expansions);

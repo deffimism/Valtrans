@@ -48,6 +48,10 @@ public static class OcrLineSelector
     private static double Score(string text, string language)
     {
         // Selection heuristic, not a calibrated OCR confidence percentage.
+        // A recognized system label is positive recognition evidence even though
+        // it intentionally produces NO translation body. Never prefer gibberish
+        // from a different language engine merely because it has more letters.
+        if (ChatTextSanitizer.IsSystemMessage(text)) return 120;
         var body = ChatTextSanitizer.ContentForLanguageDetection(text);
         var visible = body.Count(c => !char.IsWhiteSpace(c));
         if (visible == 0) return -100;

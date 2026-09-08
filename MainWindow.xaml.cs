@@ -22,10 +22,12 @@ public partial class MainWindow : System.Windows.Window
     private readonly GameChatFilterService _chatFilter;
     private readonly KeyboardReplacementService _keyboard = new();
     private readonly WindowsOcrService _ocr = new();
+    private readonly PaddleOcrService _paddleOcr = new();
+    private readonly CancellationTokenSource _windowLifetime = new();
+    private CancellationTokenSource? _paddleOperation;
     private readonly LanguagePackService _languagePacks = new();
     private readonly LocalAiService _localAi = new();
     private readonly ValtransLiteService _lite = new();
-    private readonly DlxDockerService _dlxDocker = new();
     private readonly TranslatorService _translator;
     private readonly TranslationRegressionService _regressionTests;
     private readonly DiagnosticLogService _diagnosticLog = new();
@@ -37,18 +39,20 @@ public partial class MainWindow : System.Windows.Window
     private bool _wasSupportedGameForeground;
     private bool _liteMaintenanceBusy;
     private OverlayWindow? _overlay;
+    private OcrRegionPreviewWindow? _ocrRegionPreview;
+    private bool _showOcrRegionPreview;
+    private readonly Queue<string> _ocrTrace = new();
+    private string _lastOcrStage = "";
     private CancellationTokenSource? _ocrCancellation;
-    private CancellationTokenSource? _translationQueueCancellation;
-    private readonly object _translationQueueLock = new();
-    private readonly List<TranslationQueueItem> _translationQueue = new();
-    private bool _translationWorkerRunning;
+    private IncomingOcrQueue? _incomingQueue;
+    private Task? _ocrTask;
+    private bool _startingOcr;
     private bool _sendBusy;
     private bool _translationTestBusy;
     private string _dashboardPage = "Overview";
     private bool _engineCompatibilityBusy;
     private string _lastHybridRoute = "";
     private bool _capturingHotkey;
-    private bool _dlxAutoStarting;
     private readonly SemaphoreSlim _localAiWarmLock = new(1, 1);
     private string _hotkeyBeforeCapture = "\\";
     private string _lastOcrText = "";
@@ -68,7 +72,6 @@ public partial class MainWindow : System.Windows.Window
     private HashSet<string> _previousOcrLines = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTime> _recentOcrBodies = new(StringComparer.OrdinalIgnoreCase);
     private string _activeRegionGame = "Auto";
-    private bool _updatingMapOptions;
     private bool _guideRefreshBusy;
     private bool _recommendedSetupBusy;
     private bool _diagnosticsBusy;
@@ -85,7 +88,6 @@ public partial class MainWindow : System.Windows.Window
         _chatFilter = new GameChatFilterService(_glossary);
         _translator = new TranslatorService(_glossary, _localAi, _lite);
         _regressionTests = new TranslationRegressionService(_glossary);
-        _translator.LocalFallbackActivated += Translator_OnLocalFallbackActivated;
         _translator.HybridRouteSelected += Translator_OnHybridRouteSelected;
         _translator.TranslationSafetyAdjusted += Translator_OnTranslationSafetyAdjusted;
         ApplySettingsToUi();
@@ -111,8 +113,7 @@ public partial class MainWindow : System.Windows.Window
             EnsureOverlay();
             RefreshLanguagePackStatus();
             SetStatus("준비됨", $"지원 게임이 활성화되면 {_settings.Hotkey} 단축키가 켜집니다.");
-            if ((_settings.TranslationProvider is "Ollama" or "Hybrid") ||
-                (_settings.TranslationProvider == "DeepLX" && _settings.DeepLxAutoFallback))
+            if (_settings.TranslationProvider is "Ollama" or "Hybrid")
                 await WarmUpLocalAiAsync(showGlobalStatus: false);
             if (_settings.TranslationProvider is "Lite" or "Hybrid")
                 RefreshLiteStatus();
@@ -244,22 +245,8 @@ public partial class MainWindow : System.Windows.Window
                     if (localStatus.Ready) lines.Add($"✓ {LocalAiService.GetModel(_settings.LocalAiModel).DisplayName} 준비됨");
                     else { lines.Add("✕ 선택한 로컬 AI 설치 필요"); blocking++; repairable++; }
                     break;
-                case "OpenAI":
-                    if (!string.IsNullOrWhiteSpace(_settings.ApiKey)) lines.Add("✓ OpenAI API 키 저장됨");
-                    else { lines.Add("✕ OpenAI API 키 입력 필요 · 자동 복구 불가"); blocking++; }
-                    break;
-                case "DeepL":
-                    if (!string.IsNullOrWhiteSpace(_settings.DeepLApiKey)) lines.Add("✓ DeepL API 키 입력됨 · 무료 로컬 엔진으로 전환 가능");
-                    else { lines.Add("✕ DeepL API 키 필요 · 무료 사용은 로컬 엔진 선택"); blocking++; }
-                    break;
-                case "DeepLX" when _settings.DeepLxMode == "Docker":
-                    lines.Add("△ 개인 DLX · Docker 카드에서 상태 확인 권장");
-                    break;
                 default:
-                    lines.Add(Uri.TryCreate(_settings.DeepLxUrl, UriKind.Absolute, out _)
-                        ? "✓ DLX 주소 형식 정상"
-                        : "✕ DLX 주소 확인 필요 · 자동 복구 불가");
-                    if (!Uri.TryCreate(_settings.DeepLxUrl, UriKind.Absolute, out _)) blocking++;
+                    lines.Add("✕ 로컬 번역 엔진을 선택해 주세요."); blocking++;
                     break;
             }
 
@@ -524,7 +511,6 @@ public partial class MainWindow : System.Windows.Window
     {
         if (AdvancedModeButton is null) return;
         AdvancedOcrPanel.Visibility = Visibility.Visible;
-        SimpleOcrSummaryPanel.Visibility = Visibility.Visible;
         GlossaryExpander.Visibility = Visibility.Visible;
     }
 
@@ -574,7 +560,6 @@ public partial class MainWindow : System.Windows.Window
         _settings.TranslationProvider = "Hybrid";
         _settings.LocalAiModel = LocalAiService.DefaultModelName;
         _settings.Model = LocalAiService.DefaultModelName;
-        _settings.ApiBaseUrl = LocalAiService.OpenAiBaseUrl;
         _settings.SendTargetLanguage = "EN";
         _settings.OverlayTargetLanguage = "KO";
         _settings.OcrLanguages = new List<string> { "EN", "JP", "KO" };
@@ -687,12 +672,6 @@ public partial class MainWindow : System.Windows.Window
                 : liteReady ? "△ Lite만 준비됨"
                 : localReady ? "△ Hy-MT2만 준비됨"
                 : "준비 필요 · 버튼 한 번", liteReady && localReady);
-            SimpleEngineStatusText.Text = liteReady && localReady
-                ? "Lite + Hy-MT2 준비됨 · 외부 서버 없이 자동 전환"
-                : liteReady || localReady
-                    ? $"일부 준비됨 · {(liteReady ? "Lite" : "Hy-MT2")} 사용 가능"
-                    : "번역 모델 준비 필요 · ‘엔진 준비’를 눌러 주세요";
-
             var regionReady = _settings.CaptureRegion.IsValid;
             SetGuideState(GuideRegionStateText,
                 regionReady ? $"✓ {GameDisplayName(_activeRegionGame)} 영역 저장됨" : "게임 선택 후 추천 영역", regionReady);
@@ -748,10 +727,7 @@ public partial class MainWindow : System.Windows.Window
 
     private static string ProviderDisplayName(string provider) => provider switch
     {
-        "DeepL" => "DeepL 공식 API",
-        "DeepLX" => "DLX",
         "Lite" => "Valtrans Lite",
-        "OpenAI" => "GPT-4o mini",
         "Ollama" => "로컬 AI",
         _ => "스마트 복합"
     };
@@ -887,28 +863,6 @@ public partial class MainWindow : System.Windows.Window
         }
     }
 
-    private void SelectRegion_OnClick(object sender, RoutedEventArgs e)
-    {
-        var wasVisible = _overlay?.IsVisible == true;
-        _overlay?.Hide();
-        Hide();
-        var selector = new RegionSelectorWindow();
-        var selected = selector.ShowDialog() == true ? selector.SelectedRegion : null;
-        Show();
-        Activate();
-        if (wasVisible) _overlay?.Show();
-        if (selected is null) return;
-
-        _settings.CaptureRegion = CaptureRegion.FromRectangle(selected.Value);
-        _loadedRegionProfileKey = RegionProfileKey(_activeRegionGame);
-        ResetOcrEnhancementLearning();
-        StoreCurrentRegionProfile();
-        UpdateRegionText();
-        SaveCurrentSettings(showConfirmation: false);
-        SetStatus("영역 저장됨", $"{GameDisplayName(_activeRegionGame)} OCR 영역을 저장했습니다.");
-        _ = RefreshQuickStartGuideAsync();
-    }
-
     private void RecommendRegion_OnClick(object sender, RoutedEventArgs e)
     {
         var selectedGame = GetTag(GameCombo, "Auto");
@@ -931,8 +885,8 @@ public partial class MainWindow : System.Windows.Window
             $"{GameDisplayName(game)} · {reference.Width}×{reference.Height} " +
             $"{(hasGameBounds ? "게임 창" : "모니터")} 기준입니다. " +
             (game.Equals("VALORANT", StringComparison.OrdinalIgnoreCase)
-                ? "최근 메시지용 초기값 · 하단 입력줄 제외. 채팅을 띄우고 OCR 테스트로 잘림 여부를 확인한 뒤 영역 보정하세요."
-                : "필요하면 직접 선택으로 미세 조정하세요."));
+                ? "전체 채팅 추천 · 화면 가로 1.25~24%, 세로 72.5~95.2% · 입력줄 제외. 16:9 참고값이므로 영역 표시와 OCR 테스트로 확인하세요."
+                : "게임 화면 비율에 따른 추천값입니다. OCR 영역 표시로 범위를 확인하세요."));
         _ = RefreshQuickStartGuideAsync();
     }
 
@@ -944,10 +898,31 @@ public partial class MainWindow : System.Windows.Window
 
     private async Task StartOcrAsync()
     {
+        if (_startingOcr) return;
+        _startingOcr = true;
+        try { await StartOcrCoreAsync(); }
+        finally { _startingOcr = false; }
+    }
+
+    private async Task StartOcrCoreAsync()
+    {
+        if (_paddleOperation is not null || _ocrTask is { IsCompleted: false })
+        {
+            SetStatus("OCR 정리·준비 중", "현재 작업이 끝난 뒤 다시 시작해 주세요.");
+            return;
+        }
         ReadUiIntoSettings();
+        var requestedEngine = _settings.OcrEngine;
+        var gameWindow = GameWindowDetectionService.Detect(_settings.Game);
+        if (gameWindow is not { ClientBounds.Width: >= 640, ClientBounds.Height: >= 480 })
+        {
+            SetStatus("게임 실행 필요", "VALORANT 또는 Apex Legends를 실행하면 채팅 영역을 자동으로 계산합니다.", true);
+            return;
+        }
+        SwitchToGameProfile(gameWindow.Game, forceReload: true);
         if (!_settings.CaptureRegion.IsValid)
         {
-            SetStatus("영역 필요", "먼저 게임 채팅 영역을 선택해 주세요.", true);
+            SetStatus("영역 필요", "게임 실행 후 추천 영역을 다시 적용해 주세요.", true);
             return;
         }
 
@@ -960,8 +935,13 @@ public partial class MainWindow : System.Windows.Window
             return;
         }
 
-        if (!await EnsureLanguagePackAsync()) return;
+        if (_settings.OcrEngine == "Paddle")
+        {
+            if (!await PreparePaddleOcrAsync()) return;
+        }
+        else if (!await EnsureLanguagePackAsync()) return;
         if (!await EnsureTranslationProviderReadyAsync()) return;
+        if (_windowLifetime.IsCancellationRequested || requestedEngine != _settings.OcrEngine) return;
 
         EnsureOverlay();
         SetOverlayVisible(true);
@@ -977,54 +957,21 @@ public partial class MainWindow : System.Windows.Window
         _previousOcrLines.Clear();
         _recentOcrBodies.Clear();
         _ocrCancellation = new CancellationTokenSource();
+        RefreshOcrRegionPreview();
         _ = MaintainLiteMemoryAsync(forceWarmup: true);
-        _translationQueueCancellation?.Dispose();
-        _translationQueueCancellation = CancellationTokenSource.CreateLinkedTokenSource(_ocrCancellation.Token);
+        var sessionToken = _ocrCancellation.Token;
+        _incomingQueue = new IncomingOcrQueue(ProcessIncomingLineAsync, RecordOcrStage, sessionToken);
         OcrToggleButton.Content = "OCR 중지";
         OcrToggleButton.Background = new SolidColorBrush(Color.FromRgb(49, 58, 73));
         ClearOcrIssue();
         SetStatus("OCR 실행 중", "새 채팅을 감지하면 오버레이에 번역합니다.");
         _diagnosticLog.Record("ocr_started", "ok",
             new Dictionary<string, object?> { ["game"] = _activeRegionGame, ["profile"] = profileValidation.ProfileKey });
-        _ = Task.Run(() => RunOcrLoopAsync(_ocrCancellation.Token), _ocrCancellation.Token);
+        _ocrTask = Task.Run(() => RunOcrLoopAsync(sessionToken), sessionToken);
     }
 
     private async Task<bool> EnsureTranslationProviderReadyAsync()
     {
-        if (_settings.TranslationProvider == "DeepL")
-        {
-            if (!string.IsNullOrWhiteSpace(_settings.DeepLApiKey)) return true;
-            SetStatus("DeepL API 키 필요", "API 키를 입력하거나 무료 로컬 엔진을 선택해 주세요.", true);
-            return false;
-        }
-        if (_settings.TranslationProvider == "DeepLX")
-        {
-            if (_settings.DeepLxMode == "Docker")
-            {
-                var result = await _dlxDocker.EnsureExistingContainerRunningAsync();
-                if (result.Success)
-                {
-                    _settings.DeepLxUrl = DlxDockerService.TranslateUrl;
-                    SetDlxDockerStatus(result.Message, true);
-                    return true;
-                }
-                SetDlxDockerStatus(result.Message, false);
-                SetStatus("개인 DLX 준비 필요", result.Message, true);
-                return false;
-            }
-            if (Uri.TryCreate(_settings.DeepLxUrl, UriKind.Absolute, out var endpoint) && endpoint.Scheme is "http" or "https")
-                return true;
-            SetStatus("DLX 주소 필요", "번역 엔진에서 올바른 DLX 주소를 입력해 주세요.", true);
-            return false;
-        }
-
-        if (_settings.TranslationProvider == "OpenAI")
-        {
-            if (!string.IsNullOrWhiteSpace(_settings.ApiKey)) return true;
-            SetStatus("API 키 필요", "GPT-4o mini를 사용하려면 번역 엔진에서 API 키를 입력해 주세요.", true);
-            return false;
-        }
-
         if (_settings.TranslationProvider == "Lite")
         {
             var liteStatus = _lite.GetStatus();
@@ -1062,10 +1009,9 @@ public partial class MainWindow : System.Windows.Window
         if (!IsInitialized) return;
         var provider = GetTag(TranslationProviderCombo, "Hybrid");
         _settings.TranslationProvider = provider;
-        _settings.ApiBaseUrl = provider is "Ollama" or "Hybrid" ? LocalAiService.OpenAiBaseUrl : "https://api.openai.com/v1";
-        _settings.Model = provider is "Ollama" or "Hybrid" ? _settings.LocalAiModel : "gpt-4o-mini";
+        _settings.Model = _settings.LocalAiModel;
         ApplyProviderPanels();
-        if (IsLoaded && ((provider is "Ollama" or "Hybrid") || provider == "DeepLX" && _settings.DeepLxAutoFallback))
+        if (IsLoaded && (provider is "Ollama" or "Hybrid"))
             _ = WarmUpLocalAiAsync(showGlobalStatus: false);
         if (IsLoaded && (provider is "Lite" or "Hybrid"))
             RefreshLiteStatus();
@@ -1075,31 +1021,12 @@ public partial class MainWindow : System.Windows.Window
 
     private void ApplyProviderPanels()
     {
-        if (HybridPanel is null || DeepLxPanel is null || OpenAiPanel is null || LitePanel is null || LocalAiPanel is null) return;
+        if (HybridPanel is null || LitePanel is null || LocalAiPanel is null) return;
         var provider = _settings.TranslationProvider;
-        var advanced = _settings.ShowAdvancedSettings || _dashboardPage == "Engines";
         HybridPanel.Visibility = provider == "Hybrid" ? Visibility.Visible : Visibility.Collapsed;
-        SimpleEnginePanel.Visibility = provider == "Hybrid" && !advanced ? Visibility.Visible : Visibility.Collapsed;
-        DeepLxPanel.Visibility = Visibility.Collapsed;
-        if (DeepLApiPanel is not null)
-            DeepLApiPanel.Visibility = provider == "DeepL" ? Visibility.Visible : Visibility.Collapsed;
-        OpenAiPanel.Visibility = provider == "OpenAI" ? Visibility.Visible : Visibility.Collapsed;
-        LitePanel.Visibility = provider == "Lite" || provider == "Hybrid" && advanced ? Visibility.Visible : Visibility.Collapsed;
-        LocalAiPanel.Visibility = provider == "Ollama" || provider == "Hybrid" && advanced ||
-            (provider == "DeepLX" && _settings.DeepLxAutoFallback)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-        CredentialNoticeText.Text = provider switch
-        {
-            "DeepL" => "DeepL 공식 API를 직접 사용합니다. 키는 Windows 계정으로 암호화하며 DLX·Docker는 사용하지 않습니다.",
-            "DeepLX" when _settings.DeepLxMode == "Docker" => "개인 DLX는 공개 중계 서버를 거치지 않지만 번역 요청은 DeepL 외부 서비스로 전달됩니다.",
-            "DeepLX" => "무료 공개 서버는 채팅 원문을 해당 서버 운영자에게 전송합니다.",
-            "Hybrid" => "스마트 복합 모드는 선택한 로컬 AI와 Valtrans Lite를 PC 안에서만 사용합니다.",
-            "Lite" => "Valtrans Lite는 채팅과 번역 모델을 PC 안에서만 처리합니다.",
-            "Ollama" => "로컬 번역은 채팅 내용을 외부 서버로 보내지 않습니다.",
-            _ => "API 키는 현재 Windows 사용자 계정으로 암호화해 저장합니다."
-        };
-        ApplyDeepLxModePanels();
+        LitePanel.Visibility = provider is "Lite" or "Hybrid" ? Visibility.Visible : Visibility.Collapsed;
+        LocalAiPanel.Visibility = provider is "Ollama" or "Hybrid" ? Visibility.Visible : Visibility.Collapsed;
+        CredentialNoticeText.Text = "채팅은 PC 안에서만 번역합니다. 최초 모델 다운로드에는 인터넷이 필요합니다.";
         UpdateTranslationTestPresentation();
     }
 
@@ -1144,10 +1071,6 @@ public partial class MainWindow : System.Windows.Window
         var quality = $"자동 보정 {(OcrAutoEnhanceCheck?.IsChecked == true ? "켬" : "끔")} · " +
                       $"두 프레임 합의 {(OcrConsensusCheck?.IsChecked == true ? "켬" : "끔")}";
         OcrOptionHelpText.Text = $"{filter} · {stability} · {quality}";
-        if (SimpleOcrSummaryText is not null)
-            SimpleOcrSummaryText.Text = $"{filter} · {stability} · " +
-                $"{(OcrAutoEnhanceCheck?.IsChecked == true && OcrConsensusCheck?.IsChecked == true ? "OCR 자동 보정·합의" : "OCR 품질 옵션 일부 꺼짐")} · " +
-                $"{GetTag(OverlayDurationCombo, "15")}초 표시";
     }
 
     private void TestSample_OnClick(object sender, RoutedEventArgs e)
@@ -1257,250 +1180,8 @@ public partial class MainWindow : System.Windows.Window
         "Hybrid" => "스마트 복합",
         "Lite" => "Valtrans Lite",
         "Ollama" => "로컬 AI",
-        "DeepLX" => "DLX",
-        "DeepL" => "DeepL 공식 API",
-        "OpenAI" => "GPT-4o mini",
         _ => provider
     };
-
-    private void DeepLxFallback_OnChanged(object sender, RoutedEventArgs e)
-    {
-        if (!IsInitialized || DeepLxFallbackCheck is null) return;
-        _settings.DeepLxAutoFallback = DeepLxFallbackCheck.IsChecked == true;
-        ApplyProviderPanels();
-        if (IsLoaded && _settings.DeepLxAutoFallback)
-            _ = WarmUpLocalAiAsync(showGlobalStatus: false);
-    }
-
-    private void DeepLxMode_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (!IsInitialized || DeepLxUrlBox is null) return;
-        var mode = GetTag(DeepLxModeCombo, "Public");
-        if (mode == "Docker")
-        {
-            if (!string.IsNullOrWhiteSpace(DeepLxUrlBox.Text) &&
-                !DeepLxUrlBox.Text.Contains("127.0.0.1:1188", StringComparison.OrdinalIgnoreCase))
-                _settings.PublicDeepLxUrl = DeepLxUrlBox.Text.Trim();
-            DeepLxUrlBox.Text = DlxDockerService.TranslateUrl;
-        }
-        else
-        {
-            DeepLxUrlBox.Text = string.IsNullOrWhiteSpace(_settings.PublicDeepLxUrl)
-                ? "https://deeplx.1stg.me/translate"
-                : _settings.PublicDeepLxUrl;
-        }
-        _settings.DeepLxMode = mode;
-        _settings.DeepLxUrl = mode == "Docker" ? DlxDockerService.TranslateUrl : DeepLxUrlBox.Text.Trim();
-        ApplyProviderPanels();
-        if (IsLoaded && _settings.TranslationProvider == "DeepLX" && mode == "Docker")
-        {
-            if (AutoStartDockerCheck.IsChecked == true) _ = AutoStartDlxDockerAsync();
-            else _ = RefreshDlxDockerStatusAsync();
-        }
-    }
-
-    private void ApplyDeepLxModePanels()
-    {
-        if (DeepLxPublicPanel is null || DeepLxDockerPanel is null) return;
-        var docker = _settings.DeepLxMode == "Docker";
-        DeepLxPublicPanel.Visibility = docker ? Visibility.Collapsed : Visibility.Visible;
-        DeepLxDockerPanel.Visibility = docker ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private async void TestDeepLx_OnClick(object sender, RoutedEventArgs e)
-    {
-        var endpoint = GetTag(DeepLxModeCombo, "Public") == "Docker"
-            ? DlxDockerService.TranslateUrl
-            : DeepLxUrlBox.Text.Trim();
-        SetStatus("연결 확인 중", "DLX에 짧은 테스트 번역을 요청합니다.");
-        try
-        {
-            await _translator.TestDeepLxConnectionAsync(endpoint);
-            SetStatus("연결 성공", "DLX 테스트 번역이 정상 처리됐습니다.");
-        }
-        catch (Exception ex)
-        {
-            SetStatus("연결 실패", FriendlyMessage(ex), true);
-        }
-    }
-
-    private async void RefreshDlxDocker_OnClick(object sender, RoutedEventArgs e) =>
-        await RefreshDlxDockerStatusAsync();
-
-    private async Task<DlxDockerStatus> RefreshDlxDockerStatusAsync()
-    {
-        RefreshDlxDockerButton.IsEnabled = false;
-        try
-        {
-            var status = await _dlxDocker.GetStatusAsync();
-            if (status.Ready)
-            {
-                SetDlxDockerStatus("준비 완료 · 개인 DLX가 127.0.0.1:1188에서 실행 중", true);
-                PrepareDlxDockerButton.Content = "준비 완료";
-            }
-            else if (!status.WslReady)
-            {
-                SetDlxDockerStatus("WSL 2가 설치되지 않았습니다 · 관리자 승인 후 재시작 필요", false);
-                PrepareDlxDockerButton.Content = "WSL 2 · Docker 준비";
-            }
-            else if (!status.DockerInstalled)
-            {
-                SetDlxDockerStatus("Docker Desktop이 설치되어 있지 않습니다", false);
-                PrepareDlxDockerButton.Content = "Docker · DLX 준비";
-            }
-            else if (!status.DaemonRunning)
-            {
-                SetDlxDockerStatus("Docker Desktop이 실행되고 있지 않습니다", false);
-                PrepareDlxDockerButton.Content = "Docker 시작 · 준비";
-            }
-            else if (!status.ContainerExists)
-            {
-                SetDlxDockerStatus("Docker 실행 중 · Valtrans DLX 컨테이너 없음", false);
-                PrepareDlxDockerButton.Content = "개인 DLX 만들기";
-            }
-            else
-            {
-                SetDlxDockerStatus("DLX 컨테이너가 중지됐거나 응답하지 않습니다", false);
-                PrepareDlxDockerButton.Content = "개인 DLX 시작";
-            }
-            return status;
-        }
-        finally
-        {
-            RefreshDlxDockerButton.IsEnabled = true;
-        }
-    }
-
-    private async Task AutoStartDlxDockerAsync()
-    {
-        if (_dlxAutoStarting) return;
-        _dlxAutoStarting = true;
-        PrepareDlxDockerButton.IsEnabled = false;
-        RefreshDlxDockerButton.IsEnabled = false;
-        DlxDockerProgress.Visibility = Visibility.Visible;
-        DlxDockerProgress.Value = 2;
-        SetDlxDockerStatus("WSL · Docker Desktop · 개인 DLX 자동 확인 중…", false);
-        SetStatus("개인 DLX 자동 준비 중", "WSL이 없으면 관리자 승인 후 자동 설치합니다.");
-        var progress = new Progress<DlxDockerProgress>(update =>
-        {
-            DlxDockerProgress.Value = update.Percent;
-            SetDlxDockerStatus(update.Message, false);
-            SetStatus("개인 DLX 자동 준비 중", update.Message);
-        });
-        try
-        {
-            var result = await _dlxDocker.PrepareAsync(progress);
-            DlxDockerProgress.Value = result.Success ? 100 : DlxDockerProgress.Value;
-            SetDlxDockerStatus(result.Message, result.Success);
-            if (result.Success)
-            {
-                _settings.DeepLxUrl = DlxDockerService.TranslateUrl;
-                _settingsService.Save(_settings);
-                SetStatus("개인 DLX 준비됨", "WSL, Docker Desktop과 DLX 컨테이너가 준비됐습니다.");
-            }
-            else
-                SetStatus("개인 DLX 준비 필요", result.Message, true);
-        }
-        catch (Exception ex)
-        {
-            SetDlxDockerStatus(FriendlyMessage(ex), false);
-            SetStatus("Docker 자동 시작 실패", FriendlyMessage(ex), true);
-        }
-        finally
-        {
-            await Task.Delay(500);
-            DlxDockerProgress.Visibility = Visibility.Collapsed;
-            PrepareDlxDockerButton.IsEnabled = true;
-            RefreshDlxDockerButton.IsEnabled = true;
-            _dlxAutoStarting = false;
-        }
-    }
-
-    private async void PrepareDlxDocker_OnClick(object sender, RoutedEventArgs e)
-    {
-        var refreshStatusAfterPrepare = false;
-        PrepareDlxDockerButton.IsEnabled = false;
-        RefreshDlxDockerButton.IsEnabled = false;
-        DlxDockerProgress.Visibility = Visibility.Visible;
-        DlxDockerProgress.Value = 2;
-        var progress = new Progress<DlxDockerProgress>(update =>
-        {
-            DlxDockerProgress.Value = update.Percent;
-            SetDlxDockerStatus(update.Message, false);
-            SetStatus("개인 DLX 준비 중", update.Message);
-        });
-        try
-        {
-            var result = await _dlxDocker.PrepareAsync(progress);
-            DlxDockerProgress.Value = result.Success ? 100 : DlxDockerProgress.Value;
-            SetDlxDockerStatus(result.Message, result.Success);
-            SetStatus(result.Success ? "개인 DLX 준비됨" : "Docker 확인 필요", result.Message, !result.Success);
-            if (result.Success)
-            {
-                refreshStatusAfterPrepare = true;
-                _settings.DeepLxMode = "Docker";
-                _settings.DeepLxUrl = DlxDockerService.TranslateUrl;
-                _settings.TranslationProvider = "DeepLX";
-                _settings.StopLocalDlxOnExit = StopDlxOnExitCheck.IsChecked == true;
-                _settingsService.Save(_settings);
-            }
-        }
-        catch (Exception ex)
-        {
-            SetDlxDockerStatus(FriendlyMessage(ex), false);
-            SetStatus("개인 DLX 준비 실패", FriendlyMessage(ex), true);
-        }
-        finally
-        {
-            PrepareDlxDockerButton.IsEnabled = true;
-            RefreshDlxDockerButton.IsEnabled = true;
-            await Task.Delay(500);
-            DlxDockerProgress.Visibility = Visibility.Collapsed;
-            if (refreshStatusAfterPrepare) await RefreshDlxDockerStatusAsync();
-        }
-    }
-
-    private void SetDlxDockerStatus(string text, bool ready)
-    {
-        DlxDockerStatusText.Text = text;
-        DlxDockerStatusDot.Fill = new SolidColorBrush(ready ? Color.FromRgb(5, 150, 105) : Color.FromRgb(217, 119, 6));
-    }
-
-    private async void CheckDeepLApi_OnClick(object sender, RoutedEventArgs e)
-    {
-        CheckDeepLApiButton.IsEnabled = false;
-        SetStatus("키 확인 중", "번역 요청 없이 DeepL API 사용량만 조회합니다.");
-        try
-        {
-            var message = await _translator.CheckDeepLApiUsageAsync(DeepLApiKeyBox.Password);
-            SetStatus("DeepL API 확인 완료", message);
-        }
-        catch (Exception ex) { SetStatus("DeepL API 확인 실패", FriendlyMessage(ex), true); }
-        finally { CheckDeepLApiButton.IsEnabled = true; }
-    }
-
-    private void OpenDeepLApiGuide_OnClick(object sender, RoutedEventArgs e) =>
-        OpenWebPage("https://developers.deepl.com/docs/getting-started/auth");
-
-    private async void TestOpenAi_OnClick(object sender, RoutedEventArgs e)
-    {
-        SetStatus("연결 확인 중", "OpenAI API 키와 GPT-4o mini 접근 권한을 확인합니다.");
-        try
-        {
-            await _translator.TestOpenAiConnectionAsync(ApiKeyBox.Password);
-            SetStatus("연결 성공", "API 키와 GPT-4o mini 테스트 요청이 정상 처리됐습니다.");
-        }
-        catch (Exception ex)
-        {
-            SetStatus("연결 실패", FriendlyMessage(ex), true);
-        }
-    }
-
-    private void OpenApiKeys_OnClick(object sender, RoutedEventArgs e) =>
-        OpenWebPage("https://platform.openai.com/api-keys");
-
-    private void OpenBilling_OnClick(object sender, RoutedEventArgs e) =>
-        OpenWebPage("https://platform.openai.com/settings/organization/billing/overview");
 
     private static void OpenWebPage(string url)
     {
@@ -1676,15 +1357,6 @@ public partial class MainWindow : System.Windows.Window
         UpdateTranslationTestPresentation();
     }
 
-    private void Translator_OnLocalFallbackActivated(object? sender, TranslationFallbackEventArgs e)
-    {
-        Dispatcher.BeginInvoke(() =>
-        {
-            SetLocalStatus($"자동 대체 사용 중 · {e.ModelDisplayName}", true);
-            SetStatus("로컬 대체 번역", $"{e.ModelDisplayName} · {e.Notice}");
-        });
-    }
-
     private void Translator_OnHybridRouteSelected(object? sender, HybridRouteEventArgs e)
     {
         _lastHybridRoute = e.Route;
@@ -1763,10 +1435,7 @@ public partial class MainWindow : System.Windows.Window
             {
                 var selectedProvider = GetTag(TranslationProviderCombo, "Hybrid");
                 _settings.TranslationProvider = selectedProvider;
-                _settings.ApiBaseUrl = selectedProvider is "Ollama" or "Hybrid"
-                    ? LocalAiService.OpenAiBaseUrl
-                    : "https://api.openai.com/v1";
-                _settings.Model = selectedProvider is "Ollama" or "Hybrid" ? _settings.LocalAiModel : "gpt-4o-mini";
+                _settings.Model = _settings.LocalAiModel;
                 _settingsService.Save(_settings);
                 await WarmUpLocalAiAsync();
             }
@@ -1850,9 +1519,119 @@ public partial class MainWindow : System.Windows.Window
         await EnsureLanguagePackAsync();
     }
 
+    private void OcrEngine_OnChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        _paddleOperation?.Cancel();
+        if (_ocrCancellation is not null) StopOcr();
+        _paddleOcr.Stop();
+        _settings.OcrEngine = GetTag(OcrEngineCombo, "Windows");
+        PaddleOcrStatusText.Text = _settings.OcrEngine == "Paddle" ? "준비 필요 · 로컬 OCR 준비 버튼을 눌러 주세요" : "Windows OCR 사용 중";
+        _settingsService.Save(_settings);
+    }
+
+    private void PaddleRuntime_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_paddleOperation is not null || _ocrCancellation is not null)
+        {
+            SetStatus("OCR 사용 중", "OCR을 중지한 뒤 실행 환경을 변경하세요.");
+            return;
+        }
+        var dialog = new OpenFolderDialog { Title = "model.json과 .venv가 들어 있는 OCR 실행 환경 폴더" };
+        if (dialog.ShowDialog(this) != true) return;
+        _paddleOcr.Stop();
+        _settings.PaddleOcrRuntime = dialog.FolderName;
+        _settingsService.Save(_settings);
+        PaddleOcrStatusText.Text = $"환경 선택됨 · {dialog.FolderName}";
+    }
+
+    private void PaddleGuide_OnClick(object sender, RoutedEventArgs e)
+    {
+        var guide = Path.Combine(AppContext.BaseDirectory, "Ocr", "README.md");
+        if (File.Exists(guide)) Process.Start(new ProcessStartInfo("notepad.exe") { ArgumentList = { guide }, UseShellExecute = false });
+        else SetStatus("가이드 파일 없음", "전체 배포 파일을 다시 풀어 주세요.", true);
+    }
+
+    private async void PreparePaddleOcr_OnClick(object sender, RoutedEventArgs e) => await PreparePaddleOcrAsync();
+
+    private async void InstallPaddleOcr_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_paddleOperation is not null || _ocrCancellation is not null) return;
+        if (MessageBox.Show(this, "별도 OCR 환경을 설치합니다. 최초 다운로드는 수 GB이며 약 10GB의 디스크 여유를 권장합니다.\n설치 도구 uv가 필요합니다. 기존 번역 모델이나 시스템 Python은 변경하지 않습니다.\n진행할까요?",
+            "Paddle OCR 환경 설치", MessageBoxButton.YesNo, MessageBoxImage.Information) != MessageBoxResult.Yes) return;
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(_windowLifetime.Token);
+        _paddleOperation = operation;
+        InstallPaddleOcrButton.IsEnabled = false;
+        PreparePaddleOcrButton.IsEnabled = false;
+        PaddleOcrStatusText.Text = "설치 시작 · 취소 버튼으로 중단할 수 있습니다";
+        try
+        {
+            var progress = new Progress<string>(message =>
+            {
+                if (ReferenceEquals(_paddleOperation, operation) && !operation.IsCancellationRequested)
+                    PaddleOcrStatusText.Text = message;
+            });
+            await _paddleOcr.InstallAsync(_settings.PaddleOcrRuntime, progress, operation.Token);
+            PaddleOcrStatusText.Text = _paddleOcr.Status;
+        }
+        catch (OperationCanceledException) { PaddleOcrStatusText.Text = "설치 취소됨 · 다시 설치하면 이어서 준비합니다"; }
+        catch (Exception ex) { PaddleOcrStatusText.Text = "설치 실패 · " + ex.Message; }
+        finally
+        {
+            _paddleOperation = null;
+            InstallPaddleOcrButton.IsEnabled = true;
+            PreparePaddleOcrButton.IsEnabled = true;
+        }
+    }
+
+    private void ReleasePaddleOcr_OnClick(object sender, RoutedEventArgs e)
+    {
+        _paddleOperation?.Cancel();
+        if (_ocrCancellation is not null && _settings.OcrEngine == "Paddle") StopOcr();
+        _paddleOcr.Stop();
+        PaddleOcrStatusText.Text = _paddleOcr.Status;
+    }
+
+    private async Task<bool> PreparePaddleOcrAsync()
+    {
+        if (_paddleOperation is not null) return false;
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(_windowLifetime.Token);
+        _paddleOperation = operation;
+        PreparePaddleOcrButton.IsEnabled = false;
+        PaddleOcrStatusText.Text = "준비 중 · GPU에 OCR 모델을 적재하고 있습니다…";
+        try
+        {
+            await _paddleOcr.PrepareAsync(_settings.PaddleOcrRuntime, operation.Token);
+            operation.Token.ThrowIfCancellationRequested();
+            PaddleOcrStatusText.Text = _paddleOcr.Status;
+            return true;
+        }
+        catch (OperationCanceledException) { return false; }
+        catch (Exception ex)
+        {
+            PaddleOcrStatusText.Text = "준비 실패 · " + ex.Message;
+            return false;
+        }
+        finally
+        {
+            _paddleOperation = null;
+            PreparePaddleOcrButton.IsEnabled = true;
+        }
+    }
+
+    private async Task<OcrReadResult> ReadPaddleRegionAsync(System.Drawing.Rectangle region, CancellationToken token)
+    {
+        var watch = Stopwatch.StartNew();
+        var png = await _ocr.CapturePngAsync(region);
+        token.ThrowIfCancellationRequested();
+        var captureMs = watch.Elapsed.TotalMilliseconds;
+        var result = await _paddleOcr.ReadAsync(png, _settings.PaddleOcrRuntime, token);
+        return result with { CaptureDurationMs = captureMs, TotalDurationMs = watch.Elapsed.TotalMilliseconds };
+    }
+
     private async void TestOcr_OnClick(object sender, RoutedEventArgs e)
     {
-        if (_ocrCancellation is not null)
+        if (_ocrCancellation is not null || _paddleOperation is not null)
         {
             SetStatus("OCR 실행 중", "테스트하려면 실행 중인 OCR을 먼저 중지해 주세요.", true);
             return;
@@ -1860,7 +1639,7 @@ public partial class MainWindow : System.Windows.Window
         ReadUiIntoSettings();
         if (!_settings.CaptureRegion.IsValid)
         {
-            SetStatus("영역 필요", "추천 영역 또는 직접 선택으로 OCR 영역을 먼저 설정해 주세요.", true);
+            SetStatus("영역 필요", "추천 영역으로 OCR 영역을 먼저 설정해 주세요.", true);
             return;
         }
 
@@ -1872,93 +1651,54 @@ public partial class MainWindow : System.Windows.Window
         }
 
         var missing = _settings.OcrLanguages.Where(code => !_languagePacks.IsInstalled(code)).ToArray();
-        if (missing.Length > 0)
+        if (_settings.OcrEngine != "Paddle" && missing.Length > 0)
         {
             SetStatus("언어팩 필요", $"{string.Join(", ", missing)} OCR 언어팩을 먼저 설치해 주세요.", true);
             return;
         }
 
         TestOcrButton.IsEnabled = false;
+        using var operation = CancellationTokenSource.CreateLinkedTokenSource(_windowLifetime.Token);
+        _paddleOperation = operation;
         SetStatus("OCR 테스트 중", "선택 영역에서 현재 보이는 글자를 읽고 있습니다.");
         try
         {
-            var result = await _ocr.ReadDetailedAsync(_settings.CaptureRegion.ToRectangle(), _settings.OcrLanguages,
-                autoEnhance: _settings.OcrAutoEnhance);
+            var paddle = _settings.OcrEngine == "Paddle";
+            var result = paddle
+                ? await ReadPaddleRegionAsync(_settings.CaptureRegion.ToRectangle(), operation.Token)
+                : await _ocr.ReadDetailedAsync(_settings.CaptureRegion.ToRectangle(), _settings.OcrLanguages,
+                    autoEnhance: _settings.OcrAutoEnhance);
+            operation.Token.ThrowIfCancellationRequested();
             var preview = string.IsNullOrWhiteSpace(result.Text)
                 ? "인식된 글자가 없습니다. 채팅이 보이는 상태에서 영역을 다시 조정해 주세요."
                 : result.Text.Trim();
-            var qualityMode = result.EnhancementUsed ? "자동 보정" : "원본";
+            var bodies = OcrMessageParser.Extract(result);
+            preview += $"\n\n── 시스템·닉네임·입력줄 제외 후 본문 ({bodies.Count}줄) ──\n" +
+                (bodies.Count == 0 ? "본문 없음" : string.Join(Environment.NewLine, bodies.Select(line => line.Body)));
+            var qualityMode = paddle ? $"Paddle · {result.RecognitionDurationMs / 1000:0.0}초" : result.EnhancementUsed ? "자동 보정" : "원본";
             MessageBox.Show(this, preview,
-                $"OCR 테스트 · {result.DetectedLanguage} · {qualityMode} · 선택용 추정 점수 {result.QualityScore:0} (정확도 % 아님)",
+                paddle ? $"OCR 테스트 · {qualityMode} · 한/영/일 원문" : $"OCR 테스트 · {result.DetectedLanguage} · {qualityMode} · 선택용 추정 점수 {result.QualityScore:0} (정확도 % 아님)",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             SetStatus("OCR 테스트 완료", string.IsNullOrWhiteSpace(result.Text)
                 ? "글자 없음"
-                : $"{qualityMode} · 추정 점수 {result.QualityScore:0} · {Shorten(result.Text, 55)}");
+                : $"{qualityMode} · {Shorten(result.Text, 55)}");
         }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             SetStatus("OCR 테스트 실패", OcrCaptureMessage(ex), true);
         }
         finally
         {
+            _paddleOperation = null;
             TestOcrButton.IsEnabled = true;
-        }
-    }
-
-    private void CalibrateOcr_OnClick(object sender, RoutedEventArgs e)
-    {
-        if (_ocrCancellation is not null)
-        {
-            SetStatus("OCR 실행 중", "영역을 보정하려면 실행 중인 OCR을 먼저 중지해 주세요.", true);
-            return;
-        }
-
-        ReadUiIntoSettings();
-        var missing = _settings.OcrLanguages.Where(code => !_languagePacks.IsInstalled(code)).ToArray();
-        if (missing.Length > 0)
-        {
-            SetStatus("언어팩 필요", $"{string.Join(", ", missing)} OCR 언어팩을 먼저 설치해 주세요.", true);
-            return;
-        }
-
-        var selectedGame = GetTag(GameCombo, "Auto");
-        var detected = GameWindowDetectionService.Detect(selectedGame);
-        var game = detected?.Game ?? selectedGame;
-        if (detected is not null && selectedGame.Equals("Auto", StringComparison.OrdinalIgnoreCase))
-            SetComboByTag(GameCombo, game);
-        var hasGameBounds = detected is not null && detected.ClientBounds.Width >= 640 && detected.ClientBounds.Height >= 480;
-        var reference = hasGameBounds ? detected!.ClientBounds : GetCurrentMonitorRectangle();
-        var recommended = OcrRegionRecommendationService.Recommend(game, reference);
-        var initial = _settings.CaptureRegion.IsValid ? _settings.CaptureRegion.Clone() : recommended.Clone();
-
-        var overlayWasVisible = _overlay?.IsVisible == true;
-        _overlay?.Hide();
-        Hide();
-        try
-        {
-            var wizard = new OcrCalibrationWindow(game, initial, recommended, reference, _settings.OcrLanguages);
-            if (wizard.ShowDialog() != true) return;
-            _settings.Game = game;
-            _activeRegionGame = game;
-            _settings.CaptureRegion = wizard.SelectedRegion.Clone();
-            _loadedRegionProfileKey = RegionProfileKey(game);
-            ResetOcrEnhancementLearning();
-            StoreCurrentRegionProfile();
-            _settingsService.Save(_settings);
-            UpdateRegionText();
-            SetStatus("OCR 영역 보정됨", $"{GameDisplayName(game)} · {RegionDescription(_settings.CaptureRegion)}");
-        }
-        finally
-        {
-            Show();
-            Activate();
-            if (overlayWasVisible) _overlay?.Show();
+            PaddleOcrStatusText.Text = _paddleOcr.Status;
         }
     }
 
     private async Task<bool> EnsureLanguagePackAsync()
     {
-        var codes = _settings.OcrLanguages.ToArray();
+        var codes = _settings.OcrLanguages.Append("KO").Distinct().ToArray();
         var missing = codes.Where(code => !_languagePacks.IsInstalled(code)).ToArray();
         if (missing.Length == 0)
         {
@@ -2143,17 +1883,14 @@ public partial class MainWindow : System.Windows.Window
 
     private void StopOcr()
     {
-        _ocrCancellation?.Cancel();
-        _ocrCancellation?.Dispose();
+        var stopped = _ocrCancellation;
+        stopped?.Cancel();
         _ocrCancellation = null;
-        _translationQueueCancellation?.Cancel();
-        _translationQueueCancellation?.Dispose();
-        _translationQueueCancellation = null;
-        lock (_translationQueueLock)
-        {
-            _translationQueue.Clear();
-            _translationWorkerRunning = false;
-        }
+        _incomingQueue?.Dispose();
+        _incomingQueue = null;
+        _paddleOcr.Stop();
+        PaddleOcrStatusText.Text = _paddleOcr.Status;
+        _ = (_ocrTask ?? Task.CompletedTask).ContinueWith(_ => stopped?.Dispose(), TaskScheduler.Default);
         OcrToggleButton.Content = "OCR 시작";
         OcrToggleButton.Background = (Brush)FindResource("AccentBrush");
         ClearOcrIssue();
@@ -2162,14 +1899,66 @@ public partial class MainWindow : System.Windows.Window
 
     private async Task RunOcrLoopAsync(CancellationToken cancellationToken)
     {
+        var lastRecognitionUtc = DateTime.MinValue;
+        var lastFullCheckUtc = DateTime.MinValue;
+        ulong? latestHash = null;
+        string? latestText = null;
+        var lastGeometry = "";
+        var consecutiveFailures = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
             OcrReadResult ocrResult;
+            DualOcrReadResult? dualRead = null;
             try
             {
                 var region = _settings.CaptureRegion.ToRectangle();
-                var candidateHash = await _ocr.CaptureFrameHashAsync(region);
-                if (_lastOcrFrameHash.HasValue && candidateHash == _lastOcrFrameHash.Value)
+                var latestRegion = GetLatestOcrRegion();
+                var geometry = $"{region}|{latestRegion}|{_settings.OcrEngine}|{_settings.DualRegionOcr}|{string.Join(',', _settings.OcrLanguages)}";
+                if (geometry != lastGeometry)
+                {
+                    lastGeometry = geometry;
+                    latestHash = null; latestText = null; lastFullCheckUtc = DateTime.MinValue;
+                    _lastOcrFrameHash = null; lastRecognitionUtc = DateTime.MinValue;
+                }
+                ulong candidateHash;
+                var paddle = _settings.OcrEngine == "Paddle";
+                if (paddle)
+                {
+                    candidateHash = await _ocr.CaptureFrameHashAsync(region);
+                    if (_lastOcrFrameHash == candidateHash && DateTime.UtcNow - lastRecognitionUtc < TimeSpan.FromSeconds(10))
+                    {
+                        RecordOcrStage("화면 변화 없음 · Paddle OCR 생략");
+                        await Task.Delay(_settings.OcrIntervalMs, cancellationToken);
+                        continue;
+                    }
+                    RecordOcrStage("Paddle OCR 인식 중 · 전체 채팅 1회");
+                    ocrResult = (await ReadPaddleRegionAsync(region, cancellationToken)) with { FrameHash = candidateHash };
+                    lastRecognitionUtc = DateTime.UtcNow;
+                }
+                else if (_settings.DualRegionOcr)
+                {
+                    if (_settings.OcrStabilizationMs > 0)
+                        await Task.Delay(_settings.OcrStabilizationMs, cancellationToken);
+                    dualRead = await _ocr.ReadDualAsync(region, latestRegion, _settings.OcrLanguages,
+                        latestHash, latestText, _ocrBaselinePending || _ocrConsensusRejectedFrames > 0 ||
+                        DateTime.UtcNow - lastFullCheckUtc >= TimeSpan.FromSeconds(10),
+                        _settings.OcrAutoEnhance, GetOcrEnhancementMode());
+                    ocrResult = dualRead.Result;
+                    candidateHash = ocrResult.FrameHash;
+                    RecordOcrStage(dualRead.LatestLineCount < 0 ? dualRead.Route : $"최신 {dualRead.LatestLineCount}줄 · {dualRead.Route}");
+                    if (!ocrResult.FrameChanged)
+                    {
+                        latestHash = dualRead.LatestHash;
+                        latestText = dualRead.LatestText;
+                        await Task.Delay(_settings.OcrIntervalMs, cancellationToken);
+                        continue;
+                    }
+                }
+                else
+                {
+                candidateHash = await _ocr.CaptureFrameHashAsync(region);
+                if (_lastOcrFrameHash.HasValue && candidateHash == _lastOcrFrameHash.Value &&
+                    DateTime.UtcNow - lastRecognitionUtc < TimeSpan.FromSeconds(10))
                 {
                     _unchangedOcrFrames = Math.Min(_unchangedOcrFrames + 1, 8);
                     var idleDelay = Math.Min(2400, _settings.OcrIntervalMs + _unchangedOcrFrames * 150);
@@ -2184,26 +1973,44 @@ public partial class MainWindow : System.Windows.Window
                     await Task.Delay(_settings.OcrStabilizationMs, cancellationToken);
 
                 var enhancementMode = GetOcrEnhancementMode();
+                lastRecognitionUtc = DateTime.UtcNow;
+                // A moving game background/caret must not prevent OCR forever.
+                // Validate text across captures instead of demanding identical pixels.
                 ocrResult = await _ocr.ReadDetailedAsync(region, _settings.OcrLanguages,
-                    expectedFrameHash: _settings.OcrStabilizationMs > 0 ? candidateHash : null,
                     autoEnhance: _settings.OcrAutoEnhance, enhancementMode: enhancementMode);
+                }
                 if (!ocrResult.FrameChanged)
                 {
                     await Task.Delay(Math.Max(150, _settings.OcrIntervalMs / 3), cancellationToken);
                     continue;
                 }
-                UpdateOcrEnhancementProfile(ocrResult);
-                MonitorOcrProfileQuality(ocrResult);
+                if (!paddle)
+                {
+                    UpdateOcrEnhancementProfile(ocrResult);
+                    MonitorOcrProfileQuality(ocrResult);
+                }
 
                 var captureMs = ocrResult.CaptureDurationMs;
                 var recognitionMs = ocrResult.RecognitionDurationMs + ocrResult.EnhancementDurationMs;
                 var consensusMs = 0d;
 
-                if (ShouldRunOcrConsensus(ocrResult))
+                if (!paddle && (ShouldRunOcrConsensus(ocrResult) ||
+                    (dualRead is not null && _settings.OcrTwoFrameConsensus && !string.IsNullOrWhiteSpace(ocrResult.Text)) ||
+                    (_settings.OcrTwoFrameConsensus && ocrResult.FrameHash != candidateHash &&
+                     !string.IsNullOrWhiteSpace(ocrResult.Text))))
                 {
                     var consensusWatch = Stopwatch.StartNew();
                     await Task.Delay(GetAdaptiveConsensusDelay(), cancellationToken);
-                    var confirmation = await _ocr.ReadDetailedAsync(region, _settings.OcrLanguages,
+                    OcrReadResult confirmation;
+                    if (dualRead is not null)
+                    {
+                        var dualConfirmation = await _ocr.ReadDualAsync(region, latestRegion, _settings.OcrLanguages,
+                            null, null, true, _settings.OcrAutoEnhance,
+                            ocrResult.EnhancementUsed ? OcrEnhancementModes.Enhanced : OcrEnhancementModes.Raw);
+                        confirmation = dualConfirmation.Result;
+                        dualRead = dualConfirmation;
+                    }
+                    else confirmation = await _ocr.ReadDetailedAsync(region, _settings.OcrLanguages,
                         autoEnhance: _settings.OcrAutoEnhance &&
                                      (ocrResult.EnhancementUsed || ocrResult.QualityScore < 56),
                         enhancementMode: ocrResult.EnhancementUsed ? OcrEnhancementModes.Enhanced : OcrEnhancementModes.Raw);
@@ -2214,6 +2021,7 @@ public partial class MainWindow : System.Windows.Window
                     RecordOcrPerformance(captureMs, recognitionMs, consensusMs);
                     if (!TryBuildOcrConsensus(ocrResult, confirmation, out var consensus))
                     {
+                        RecordOcrStage("안정화 대기 · 두 화면에서 같은 본문을 확인하지 못함");
                         _ocrConsensusRejectedFrames++;
                         if (_ocrConsensusRejectedFrames % 4 == 1)
                             Dispatcher.Invoke(() => SetStatus("OCR 글자 안정화 중", "숫자·방향이 한 번 더 동일하게 읽히는지 확인하고 있습니다."));
@@ -2227,10 +2035,29 @@ public partial class MainWindow : System.Windows.Window
                 {
                     RecordOcrPerformance(captureMs, recognitionMs, consensusMs);
                 }
+                cancellationToken.ThrowIfCancellationRequested();
+                if (region != _settings.CaptureRegion.ToRectangle() || latestRegion != GetLatestOcrRegion()) continue;
+                if (dualRead is not null)
+                {
+                    latestHash = dualRead.LatestHash;
+                    latestText = dualRead.LatestText;
+                    if (dualRead.FullChecked) lastFullCheckUtc = DateTime.UtcNow;
+                }
+                consecutiveFailures = 0;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
             catch (Exception ex)
             {
+                if (cancellationToken.IsCancellationRequested) return;
+                if (_settings.OcrEngine == "Paddle" && ++consecutiveFailures >= 3)
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        StopOcr();
+                        ShowOcrIssue("Paddle OCR 중지됨", "연속 3회 실패했습니다. 영역·GPU 메모리를 확인하거나 Windows OCR을 선택하세요.");
+                    });
+                    return;
+                }
                 _diagnosticLog.RecordException("ocr_capture", ex);
                 Dispatcher.Invoke(() => ShowOcrIssue("OCR 캡처 오류", OcrCaptureMessage(ex)));
                 try { await Task.Delay(2500, cancellationToken); }
@@ -2251,12 +2078,14 @@ public partial class MainWindow : System.Windows.Window
                 Dispatcher.Invoke(() => UpdateDetectedOcrLanguage(ocrResult.DetectedLanguage));
             var comparison = NormalizeOcr(original);
             var currentLines = ExtractOcrLines(ocrResult);
+            RecordOcrStage($"{(dualRead is null ? "전체" : "전체+최신 병합")} {currentLines.Count}줄 인식");
             if (_ocrBaselinePending)
             {
                 _ocrBaselinePending = false;
                 _lastOcrText = comparison;
                 _previousOcrLines = currentLines.Select(line => line.Normalized).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 RememberOcrBodies(currentLines.Select(line => ChatTextSanitizer.StripChatPrefix(line.Original)));
+                RecordOcrStage($"기준 화면 등록 · 기존 {currentLines.Count}줄 제외");
                 Dispatcher.Invoke(() => SetStatus("OCR 기준 화면 저장됨", "현재 보이는 기존 채팅은 건너뛰고 새 채팅부터 번역합니다."));
             }
             else if (comparison.Length >= 2 && comparison != _lastOcrText)
@@ -2265,7 +2094,7 @@ public partial class MainWindow : System.Windows.Window
                     .Where(line => !_previousOcrLines.Any(previous => AreSimilarOcrText(line.Normalized, previous)))
                     .ToArray();
                 var historyRedisplay = newLines.Length >= 3 && currentLines.Count >= 3;
-                newLines = SelectNewestPositionedLines(newLines);
+                if (dualRead is null) newLines = SelectNewestPositionedLines(newLines);
                 _lastOcrText = comparison;
                 _previousOcrLines = currentLines.Select(line => line.Normalized).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 if (newLines.Length > 0)
@@ -2283,13 +2112,21 @@ public partial class MainWindow : System.Windows.Window
                         .ToArray();
                     var relevanceSkipped = filteredBodies.Count(item => !item.Filter.Keep);
                     var onlyLowRelevance = messageBodies.Length > 0 && relevanceSkipped == messageBodies.Length;
+                    var targetSkipped = filteredBodies.Count(item => item.Filter.Keep &&
+                        DetectTextLanguage(item.Filter.Text, ocrResult.DetectedLanguage).Equals(_settings.OverlayTargetLanguage, StringComparison.OrdinalIgnoreCase));
+                    var duplicateSkipped = filteredBodies.Count(item => item.Filter.Keep &&
+                        !DetectTextLanguage(item.Filter.Text, ocrResult.DetectedLanguage).Equals(_settings.OverlayTargetLanguage, StringComparison.OrdinalIgnoreCase) &&
+                        WasRecentlyHandled(item.Original, historyRedisplay));
                     var translatableBodies = filteredBodies
                         .Where(item => item.Filter.Keep)
+                        .Where(item => _settings.OcrLanguages.Contains(DetectTextLanguage(item.Filter.Text, ocrResult.DetectedLanguage)))
                         .Where(item => !DetectTextLanguage(item.Filter.Text, ocrResult.DetectedLanguage)
                             .Equals(_settings.OverlayTargetLanguage, StringComparison.OrdinalIgnoreCase))
                         .Where(item => !WasRecentlyHandled(item.Original, historyRedisplay))
                         .Select(item => item.Filter.Text)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
                         .ToArray();
+                    RecordOcrStage($"새 본문 {messageBodies.Length} · 필터 제외 {relevanceSkipped} · 출력언어 {targetSkipped} · 중복 {duplicateSkipped} · 번역 대기 {translatableBodies.Length}");
                     if (translatableBodies.Length == 0)
                     {
                         Dispatcher.Invoke(() => SetStatus(
@@ -2299,6 +2136,7 @@ public partial class MainWindow : System.Windows.Window
                                 : onlyLowRelevance
                                     ? $"{relevanceSkipped}줄 · 잡담이나 감정 표현으로 판정했습니다."
                                     : "시스템 문구·기존 기록이거나 이미 출력 언어인 새 줄입니다."));
+                        await Task.Delay(_settings.OcrIntervalMs, cancellationToken);
                         continue;
                     }
 
@@ -2306,7 +2144,9 @@ public partial class MainWindow : System.Windows.Window
                     RememberOcrBodies(messageBodies);
                     QueueLatestTranslation(newText, newLines.Length - translatableBodies.Length);
                 }
+                else RecordOcrStage("새 본문 없음 · 기존 채팅과 동일");
             }
+            else RecordOcrStage(currentLines.Count == 0 ? "본문 없음 · 영역/OCR 테스트 확인 필요" : "본문 변화 없음 · 번역 생략");
 
             try { await Task.Delay(_settings.OcrIntervalMs, cancellationToken); }
             catch (OperationCanceledException) { return; }
@@ -2315,93 +2155,39 @@ public partial class MainWindow : System.Windows.Window
 
     private void QueueLatestTranslation(string text, int skippedCount)
     {
-        var startWorker = false;
-        lock (_translationQueueLock)
-        {
-            var normalized = NormalizeOcr(text);
-            if (!_translationQueue.Any(item => NormalizeOcr(item.Text).Equals(normalized, StringComparison.OrdinalIgnoreCase)))
-                _translationQueue.Add(new TranslationQueueItem(text, skippedCount));
-            if (!_translationWorkerRunning)
-            {
-                _translationWorkerRunning = true;
-                startWorker = true;
-            }
-        }
-
-        if (startWorker && _translationQueueCancellation is not null)
-            _ = ProcessTranslationQueueAsync(_translationQueueCancellation.Token);
+        _incomingQueue?.Enqueue(text);
     }
 
-    private async Task ProcessTranslationQueueAsync(CancellationToken cancellationToken)
+    private async Task ProcessIncomingLineAsync(string text, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        Dispatcher.Invoke(() => SetStatus("새 채팅 번역 중", Shorten(text, 52)));
+        var translationWatch = Stopwatch.StartNew();
         try
         {
-            while (!cancellationToken.IsCancellationRequested)
+            _lastHybridRoute = "";
+            var result = await TranslateWithSafeBriefingDeadlineAsync(new[] { text }, text, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            Dispatcher.Invoke(() =>
             {
-                await Task.Delay(250, cancellationToken);
-                TranslationQueueItem[] batch;
-                lock (_translationQueueLock)
-                {
-                    if (_translationQueue.Count == 0) return;
-                    batch = _translationQueue.ToArray();
-                    _translationQueue.Clear();
-                }
-
-                var lines = batch.SelectMany(item => item.Text.Split(new[] { '\r', '\n' },
-                        StringSplitOptions.RemoveEmptyEntries))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-                var text = string.Join(Environment.NewLine, lines);
-                var skippedCount = batch.Sum(item => item.SkippedCount);
-                Dispatcher.Invoke(() => SetStatus("최신 채팅 묶음 번역 중", $"{lines.Length}줄 · {Shorten(text, 52)}"));
-
-                string translated;
-                var usedSafeBriefing = false;
-                _lastHybridRoute = "";
-                var translationWatch = Stopwatch.StartNew();
-                try
-                {
-                    var batchResult = await TranslateWithSafeBriefingDeadlineAsync(lines, text, cancellationToken);
-                    translated = batchResult.Text;
-                    usedSafeBriefing = batchResult.UsedSafeBriefing;
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-                catch (Exception ex)
-                {
-                    translationWatch.Stop();
-                    RecordTranslationPerformance(translationWatch.Elapsed.TotalMilliseconds);
-                    _diagnosticLog.RecordException("ocr_translation", ex);
-                    Dispatcher.Invoke(() => ShowOcrIssue("번역 연결 오류", FriendlyMessage(ex)));
-                    continue;
-                }
-                translationWatch.Stop();
-                RecordTranslationPerformance(translationWatch.Elapsed.TotalMilliseconds);
-
-                _overlay?.AddTranslation(ShortenLines(text, 180), ShortenLines(translated, 240),
+                if (cancellationToken.IsCancellationRequested) return;
+                _overlay?.AddTranslation(ShortenLines(text, 180), ShortenLines(result.Text, 240),
                     _settings.OverlayDisplaySeconds);
-                Dispatcher.Invoke(() => SetStatus(
-                    usedSafeBriefing
-                        ? "즉시 안전 브리핑 표시"
-                        : _settings.TranslationProvider == "Hybrid" && _lastHybridRoute.Length > 0
-                        ? $"새 채팅 번역됨 · {_lastHybridRoute}"
-                        : "새 채팅 번역됨",
-                    skippedCount > 0 ? $"{skippedCount}줄 제외 · {Shorten(translated, 58)}" : Shorten(translated, 75)));
-            }
+                SetStatus(result.UsedSafeBriefing ? "즉시 안전 브리핑 표시" : "새 채팅 번역됨", Shorten(result.Text, 75));
+            });
+            RecordOcrStage("번역 완료 1줄 · 완료 즉시 표시");
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            _diagnosticLog.RecordException("ocr_translation", ex);
+            Dispatcher.Invoke(() => ShowOcrIssue("한 줄 번역 오류", FriendlyMessage(ex)));
+            throw;
+        }
         finally
         {
-            var restart = false;
-            lock (_translationQueueLock)
-            {
-                _translationWorkerRunning = false;
-                if (_translationQueue.Count > 0 && !cancellationToken.IsCancellationRequested)
-                {
-                    _translationWorkerRunning = true;
-                    restart = true;
-                }
-            }
-            if (restart) _ = ProcessTranslationQueueAsync(cancellationToken);
+            translationWatch.Stop();
+            RecordTranslationPerformance(translationWatch.Elapsed.TotalMilliseconds);
         }
     }
 
@@ -2498,14 +2284,14 @@ public partial class MainWindow : System.Windows.Window
             AreSimilarOcrText(line.Normalized, previous.Normalized))).ToArray();
         if (stable.Length == 0) return false;
         var newest = secondLines.Where(line => line.Y >= 0).OrderBy(line => line.Y + line.Height).LastOrDefault();
-        if (newest is not null && !stable.Any(line =>
-                AreSimilarOcrText(line.Normalized, newest.Normalized))) return false;
+        // Keep confirmed rows even if the input caret/newest row is still changing.
+        // Unconfirmed rows remain excluded and will be checked on the next poll.
         if (newest is null && stable.Length < Math.Max(1, (int)Math.Ceiling(secondLines.Count * 0.75))) return false;
 
         var stableText = string.Join(Environment.NewLine, stable.Select(line => line.Original));
         var stableNormalized = stable.Select(line => line.Normalized).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var positioned = second.PositionedLines?.Where(line => stableNormalized.Any(value =>
-            AreSimilarOcrText(NormalizeOcr(line.Text), value))).ToArray();
+            AreSimilarOcrText(NormalizeOcr(ChatTextSanitizer.NormalizeOcrBody(line.Text)), value))).ToArray();
         consensus = second with
         {
             Text = stableText,
@@ -2737,6 +2523,9 @@ public partial class MainWindow : System.Windows.Window
             parts.Add($"site:{normalized[^1]}");
         foreach (var direction in new[] { "left", "right", "front", "back", "왼쪽", "오른쪽", "앞", "뒤", "左", "右", "前", "後" })
             if (normalized.Contains(direction, StringComparison.Ordinal)) parts.Add($"dir:{direction}");
+        foreach (var fact in new[] { "not", "no", "never", "don't", "dont", "can't", "cant", "maybe", "might",
+                     "안", "않", "말", "아니", "아마", "같아", "ない", "ません", "かも", "一", "二", "三", "四", "五" })
+            if (normalized.Contains(fact, StringComparison.Ordinal)) parts.Add($"fact:{fact}");
         return string.Join('|', parts);
     }
 
@@ -2779,7 +2568,7 @@ public partial class MainWindow : System.Windows.Window
         if (ex is ObjectDisposedException)
             return "OCR 이미지 처리 중 스트림이 닫혔습니다. 최신 버전으로 다시 실행해 주세요.";
         if (ex is System.Runtime.InteropServices.ExternalException or ArgumentException)
-            return "선택 영역을 캡처하지 못했습니다. 게임을 테두리 없는 창 모드로 바꾸고 영역을 다시 선택해 주세요.";
+            return "선택 영역을 캡처하지 못했습니다. 게임을 테두리 없는 창 모드로 바꾸고 추천 영역을 다시 적용해 주세요.";
         if (ex is UnauthorizedAccessException)
             return "화면 캡처 권한이 없습니다. 게임이 관리자 권한이면 Valtrans도 관리자 권한으로 실행해 주세요.";
         return FriendlyMessage(ex);
@@ -2812,44 +2601,18 @@ public partial class MainWindow : System.Windows.Window
     {
         if (!IsLoaded || _autoSwitchingGameProfile) return;
 
-        _settings.MapsByGame[_activeRegionGame] = GetTag(MapCombo, _settings.Map);
         StoreCurrentRegionProfile();
         var selectedGame = GetTag(GameCombo, "Auto");
         _settings.Game = selectedGame;
-        RefreshMapOptions(selectedGame, _settings.MapsByGame.GetValueOrDefault(selectedGame, "Auto"));
         _activeRegionGame = selectedGame;
         LoadRegionProfile(selectedGame);
         _settingsService.Save(_settings);
 
         if (_settings.CaptureRegion.IsValid)
-            SetStatus("영역 불러옴", $"{GameDisplayName(selectedGame)}에 저장된 OCR 영역을 불러왔습니다.");
+            SetStatus("영역 불러옴", $"{GameDisplayName(selectedGame)}에 화면 크기에 맞춰 OCR 영역을 계산했습니다.");
         else
             SetStatus("영역 미설정", $"{GameDisplayName(selectedGame)}용 OCR 영역을 선택해 주세요.");
         _ = RefreshQuickStartGuideAsync();
-    }
-
-    private void Map_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (!IsLoaded || _updatingMapOptions) return;
-        _settings.Map = GetTag(MapCombo, "Auto");
-        _settings.MapsByGame[_activeRegionGame] = _settings.Map;
-        _settingsService.Save(_settings);
-        SetStatus("맵 사전 적용", _settings.Map == "Auto"
-            ? "공통 위치 용어를 사용합니다."
-            : $"{_settings.Map} 위치 용어를 번역에 반영합니다.");
-    }
-
-    private void AutoSwitchGameProfile_OnChanged(object sender, RoutedEventArgs e)
-    {
-        if (!IsLoaded) return;
-        _settings.AutoSwitchGameProfile = AutoSwitchGameProfileCheck.IsChecked == true;
-        _settingsService.Save(_settings);
-        _lastForegroundProfileGame = "";
-        UpdateGameHotkeyRegistration();
-        SetStatus(_settings.AutoSwitchGameProfile ? "게임 프로필 자동 전환 켜짐" : "게임 프로필 자동 전환 꺼짐",
-            _settings.AutoSwitchGameProfile
-                ? "전면의 VALORANT 또는 Apex Legends에 맞춰 OCR 영역과 맵 사전을 불러옵니다."
-                : "게임·맵 선택을 수동으로 유지합니다.");
     }
 
     private void SwitchToGameProfile(string activeGame, bool forceReload = false)
@@ -2860,14 +2623,10 @@ public partial class MainWindow : System.Windows.Window
         _autoSwitchingGameProfile = true;
         try
         {
-            _settings.MapsByGame[_activeRegionGame] = GetTag(MapCombo, _settings.Map);
             StoreCurrentRegionProfile();
             _settings.Game = activeGame;
             _activeRegionGame = activeGame;
             SetComboByTag(GameCombo, activeGame);
-            var map = _settings.MapsByGame.GetValueOrDefault(activeGame, "Auto");
-            RefreshMapOptions(activeGame, map);
-            _settings.Map = GetTag(MapCombo, "Auto");
             LoadRegionProfile(activeGame);
             _lastOcrFrameHash = null;
             _ocrBaselinePending = true;
@@ -2876,7 +2635,7 @@ public partial class MainWindow : System.Windows.Window
             _settingsService.Save(_settings);
             SetStatus("게임 프로필 전환됨",
                 _settings.CaptureRegion.IsValid
-                    ? $"{activeGame} · {_settings.Map} · 저장된 OCR 영역을 불러왔습니다."
+                    ? $"{activeGame} · 화면 크기에 맞춰 OCR 영역을 계산했습니다."
                     : $"{activeGame} 프로필에 저장된 OCR 영역이 없습니다. 추천 영역을 적용해 주세요.");
             _ = RefreshQuickStartGuideAsync();
         }
@@ -2926,6 +2685,13 @@ public partial class MainWindow : System.Windows.Window
         _overlay?.SetClickThrough(_settings.OverlayClickThrough);
     }
 
+    private void MoveOverlay_OnClick(object sender, RoutedEventArgs e)
+    {
+        OverlayLockCheck.IsChecked = false;
+        SetOverlayVisible(true);
+        SetStatus("오버레이 이동 모드", "상단 이동 바를 드래그한 뒤 ‘완료 · 잠금’을 누르면 위치가 저장됩니다.");
+    }
+
     private void OverlayTransparency_OnValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         var transparency = Math.Clamp(OverlayTransparencySlider.Value, 0, 100);
@@ -2970,6 +2736,13 @@ public partial class MainWindow : System.Windows.Window
         _overlay.SetBackgroundOpacity(_settings.OverlayBackgroundOpacity);
         _overlay.SetBorderOpacity(_settings.OverlayBorderOpacity);
         _overlay.SetFontSize(_settings.OverlayFontSize);
+        _overlay.MoveFinished += (_, _) =>
+        {
+            OverlayLockCheck.IsChecked = true;
+            StoreOverlayBounds();
+            _settingsService.Save(_settings);
+            SetStatus("오버레이 위치 저장됨", "클릭 통과를 켰습니다. 이동 바는 플레이 중 표시되지 않습니다.");
+        };
     }
 
     private void StoreOverlayBounds()
@@ -2983,30 +2756,18 @@ public partial class MainWindow : System.Windows.Window
 
     private void ApplySettingsToUi()
     {
+        SetComboByTag(OcrEngineCombo, _settings.OcrEngine);
+        PaddleOcrStatusText.Text = _settings.OcrEngine == "Paddle" ? _paddleOcr.Status : "Windows OCR 사용 중";
         var assembly = typeof(MainWindow).Assembly;
         var version = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
             .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0]
             ?? assembly.GetName().Version?.ToString(3);
         VersionText.Text = $"Valtrans {version} · Windows 10/11 · 시스템 OCR";
-        ApiKeyBox.Password = _settings.ApiKey;
-        DeepLApiKeyBox.Password = _settings.DeepLApiKey;
-        if (_settings.DeepLxMode is not ("Public" or "Docker")) _settings.DeepLxMode = "Public";
-        if (string.IsNullOrWhiteSpace(_settings.PublicDeepLxUrl))
-            _settings.PublicDeepLxUrl = "https://deeplx.1stg.me/translate";
-        SetComboByTag(DeepLxModeCombo, _settings.DeepLxMode);
-        DeepLxUrlBox.Text = _settings.DeepLxMode == "Docker"
-            ? DlxDockerService.TranslateUrl
-            : string.IsNullOrWhiteSpace(_settings.PublicDeepLxUrl)
-            ? "https://deeplx.1stg.me/translate"
-            : _settings.PublicDeepLxUrl;
-        StopDlxOnExitCheck.IsChecked = _settings.StopLocalDlxOnExit;
-        AutoStartDockerCheck.IsChecked = _settings.AutoStartDockerDesktop;
-        DeepLxFallbackCheck.IsChecked = _settings.DeepLxAutoFallback;
         _settings.LocalAiModel = LocalAiService.NormalizeModelName(_settings.LocalAiModel);
         SetComboByTag(LocalModelCombo, _settings.LocalAiModel);
         SetComboByTag(ServerRegionCombo, GameTranslationPrompt.NormalizeRegion(_settings.ServerRegion));
         ApplyLocalModelPresentation();
-        if (_settings.TranslationProvider is not ("Hybrid" or "DeepL" or "Lite" or "OpenAI" or "Ollama")) _settings.TranslationProvider = "Hybrid";
+        if (_settings.TranslationProvider is not ("Hybrid" or "Lite" or "Ollama")) _settings.TranslationProvider = "Hybrid";
         SetComboByTag(TranslationProviderCombo, _settings.TranslationProvider);
         SetComboByTag(SendTargetCombo, _settings.SendTargetLanguage);
         SetComboByTag(TestModeCombo, "Send");
@@ -3020,10 +2781,8 @@ public partial class MainWindow : System.Windows.Window
         SetComboByTag(OcrChatFilterCombo, _settings.OcrChatFilterMode);
         OcrAutoEnhanceCheck.IsChecked = _settings.OcrAutoEnhance;
         OcrConsensusCheck.IsChecked = _settings.OcrTwoFrameConsensus;
-        AutoSwitchGameProfileCheck.IsChecked = _settings.AutoSwitchGameProfile;
         _activeRegionGame = _settings.Game;
         SetComboByTag(GameCombo, _settings.Game);
-        RefreshMapOptions(_settings.Game, _settings.MapsByGame.GetValueOrDefault(_settings.Game, _settings.Map));
         HotkeyBox.Text = _settings.Hotkey;
         OverlayLockCheck.IsChecked = _settings.OverlayClickThrough;
         _settings.OverlayBackgroundOpacity = Math.Clamp(_settings.OverlayBackgroundOpacity, 0, 1);
@@ -3047,25 +2806,10 @@ public partial class MainWindow : System.Windows.Window
 
     private void ReadUiIntoSettings(bool preserveRegion = true)
     {
-        _settings.ApiKey = ApiKeyBox.Password.Trim();
-        _settings.DeepLApiKey = DeepLApiKeyBox.Password.Trim();
-        _settings.DeepLxMode = GetTag(DeepLxModeCombo, "Public");
-        _settings.AutoStartDockerDesktop = AutoStartDockerCheck.IsChecked == true;
-        _settings.StopLocalDlxOnExit = StopDlxOnExitCheck.IsChecked == true;
-        _settings.DeepLxAutoFallback = DeepLxFallbackCheck.IsChecked == true;
+        _settings.OcrEngine = GetTag(OcrEngineCombo, "Windows");
         _settings.LocalAiModel = LocalAiService.NormalizeModelName(GetTag(LocalModelCombo, LocalAiService.DefaultModelName));
-        if (_settings.DeepLxMode == "Docker")
-        {
-            _settings.DeepLxUrl = DlxDockerService.TranslateUrl;
-        }
-        else
-        {
-            _settings.PublicDeepLxUrl = DeepLxUrlBox.Text.Trim();
-            _settings.DeepLxUrl = _settings.PublicDeepLxUrl;
-        }
         _settings.TranslationProvider = GetTag(TranslationProviderCombo, "Hybrid");
-        _settings.ApiBaseUrl = _settings.TranslationProvider is "Ollama" or "Hybrid" ? LocalAiService.OpenAiBaseUrl : "https://api.openai.com/v1";
-        _settings.Model = _settings.TranslationProvider is "Ollama" or "Hybrid" ? _settings.LocalAiModel : "gpt-4o-mini";
+        _settings.Model = _settings.LocalAiModel;
         _settings.SendTargetLanguage = GetTag(SendTargetCombo, "EN");
         _settings.OverlayTargetLanguage = GetTag(OverlayTargetCombo, "KO");
         _settings.OverlayDisplaySeconds = int.TryParse(GetTag(OverlayDurationCombo, "15"), out var displaySeconds)
@@ -3077,13 +2821,10 @@ public partial class MainWindow : System.Windows.Window
         _settings.OcrChatFilterMode = GetTag(OcrChatFilterCombo, GameChatFilterService.BriefingMode);
         _settings.OcrAutoEnhance = OcrAutoEnhanceCheck.IsChecked == true;
         _settings.OcrTwoFrameConsensus = OcrConsensusCheck.IsChecked == true;
-        _settings.AutoSwitchGameProfile = AutoSwitchGameProfileCheck.IsChecked == true;
         _settings.OverlayFontSize = Math.Round(Math.Clamp(OverlayFontSizeSlider.Value, 11, 32));
         _settings.OcrLanguages = ReadOcrLanguages();
         _settings.OcrLanguage = _settings.OcrLanguages.Count == 1 ? _settings.OcrLanguages[0] : "AUTO";
         _settings.Game = GetTag(GameCombo, "Auto");
-        _settings.Map = GetTag(MapCombo, "Auto");
-        _settings.MapsByGame[_settings.Game] = _settings.Map;
         _settings.ServerRegion = GameTranslationPrompt.NormalizeRegion(GetTag(ServerRegionCombo, "Auto"));
         _activeRegionGame = _settings.Game;
         _settings.Hotkey = string.IsNullOrWhiteSpace(HotkeyBox.Text) ? "\\" : HotkeyBox.Text;
@@ -3093,33 +2834,6 @@ public partial class MainWindow : System.Windows.Window
         StoreOverlayBounds();
         _settings.CustomGlossary = ParseGlossary(GlossaryBox.Text);
         if (preserveRegion) StoreCurrentRegionProfile();
-    }
-
-    private void RefreshMapOptions(string game, string selectedMap)
-    {
-        _updatingMapOptions = true;
-        try
-        {
-            MapCombo.Items.Clear();
-            foreach (var map in _glossary.GetMaps(game))
-            {
-                MapCombo.Items.Add(new ComboBoxItem
-                {
-                    Tag = map,
-                    Content = new TextBlock
-                    {
-                        Text = map == "Auto" ? "맵 자동 · 공통" : map,
-                        Foreground = Brushes.Black
-                    }
-                });
-            }
-            SetComboByTag(MapCombo, selectedMap);
-            _settings.Map = GetTag(MapCombo, "Auto");
-        }
-        finally
-        {
-            _updatingMapOptions = false;
-        }
     }
 
     private List<string> ReadOcrLanguages(bool updateUiWhenEmpty = true)
@@ -3173,30 +2887,8 @@ public partial class MainWindow : System.Windows.Window
             _adaptiveOcrMode = "Balanced";
             UpdateOcrPerformanceText();
         }
-        if (_settings.CaptureRegionsByGame.TryGetValue(key, out var exactRegion))
-        {
-            _settings.CaptureRegion = exactRegion.Clone();
-            if (_settings.CaptureProfileMetadataByGame.TryGetValue(key, out var metadata) &&
-                metadata.ReferenceWidth == context.Bounds.Width && metadata.ReferenceHeight == context.Bounds.Height &&
-                metadata.Dpi == context.Dpi &&
-                string.Equals(metadata.WindowMode, context.WindowMode, StringComparison.OrdinalIgnoreCase) &&
-                (metadata.ReferenceX != context.Bounds.X || metadata.ReferenceY != context.Bounds.Y))
-            {
-                _settings.CaptureRegion.X += context.Bounds.X - metadata.ReferenceX;
-                _settings.CaptureRegion.Y += context.Bounds.Y - metadata.ReferenceY;
-                StoreCurrentRegionProfile();
-            }
-        }
-        else if (_settings.CaptureRegionsByGame.TryGetValue(game, out var legacyRegion) &&
-                 context.Bounds.Contains(legacyRegion.ToRectangle()))
-        {
-            _settings.CaptureRegion = legacyRegion.Clone();
-            StoreCurrentRegionProfile();
-        }
-        else
-        {
-            _settings.CaptureRegion = new CaptureRegion();
-        }
+        _settings.CaptureRegion = OcrRegionRecommendationService.Recommend(game, context.Bounds);
+        StoreCurrentRegionProfile();
         UpdateRegionText();
     }
 
@@ -3204,8 +2896,63 @@ public partial class MainWindow : System.Windows.Window
     {
         var reference = GetCaptureReferenceBounds(_activeRegionGame);
         RegionText.Text = _settings.CaptureRegion.IsValid
-            ? $"{GameDisplayName(_activeRegionGame)} · {reference.Width}×{reference.Height} · {RegionDescription(_settings.CaptureRegion)}"
+            ? $"{GameDisplayName(_activeRegionGame)} · {reference.Width}×{reference.Height} · 자동 추천"
             : $"{GameDisplayName(_activeRegionGame)} · {reference.Width}×{reference.Height} · 저장된 영역 없음";
+        var detected = GameWindowDetectionService.Detect(_activeRegionGame);
+        RegionHintText.Text = detected is null
+            ? "현재 모니터 기준 미리보기 · 게임 실행 시 다시 계산합니다."
+            : Math.Abs((double)reference.Width / reference.Height - 16.0 / 9) > 0.03
+                ? "16:9 이외의 화면 비율입니다. 영역 표시로 추천 범위를 확인하세요."
+                : _activeRegionGame == "VALORANT"
+                    ? "발로란트 16:9 기준 · 입력줄 제외 · 창 위치와 해상도를 자동 반영"
+                    : "게임별 참고 영역 · 영역 표시로 실제 채팅 위치를 확인하세요.";
+        RefreshOcrRegionPreview();
+    }
+
+    private System.Drawing.Rectangle GetLatestOcrRegion()
+    {
+        return DualOcrRegions.Resolve(_settings.CaptureRegion.ToRectangle(), null);
+    }
+
+    private void RecordOcrStage(string message)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (message == _lastOcrStage) return;
+            _lastOcrStage = message;
+            var entry = $"{DateTime.Now:HH:mm:ss} · {message}";
+            _ocrTrace.Enqueue(entry);
+            while (_ocrTrace.Count > 8) _ocrTrace.Dequeue();
+            OcrPipelineTraceText.Text = string.Join(Environment.NewLine, _ocrTrace);
+        });
+    }
+
+    private void ToggleOcrRegionPreview_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!_showOcrRegionPreview && !_settings.CaptureRegion.IsValid)
+        {
+            SetStatus("OCR 영역 필요", "추천 영역으로 영역을 먼저 지정해 주세요.");
+            return;
+        }
+        _showOcrRegionPreview = !_showOcrRegionPreview;
+        RefreshOcrRegionPreview();
+        SetStatus(_showOcrRegionPreview ? "OCR 영역 표시 중" : "OCR 영역 표시 꺼짐",
+            _showOcrRegionPreview ? "하늘색 테두리 안쪽이 실제 읽는 영역입니다. 클릭은 통과합니다. 같은 버튼으로 끌 수 있습니다." : "영역 표시는 껐으며 OCR 실행 상태는 변경하지 않았습니다.");
+    }
+
+    private void RefreshOcrRegionPreview()
+    {
+        if (!_showOcrRegionPreview || !_settings.CaptureRegion.IsValid)
+        {
+            _ocrRegionPreview?.Hide();
+        }
+        else
+        {
+            _ocrRegionPreview ??= new OcrRegionPreviewWindow();
+            _ocrRegionPreview.ShowRegion(_settings.CaptureRegion.ToRectangle());
+        }
+        if (OcrRegionPreviewButton is not null)
+            OcrRegionPreviewButton.Content = _showOcrRegionPreview ? "영역 표시 끄기" : "OCR 영역 표시";
     }
 
     private string RegionProfileKey(string game)
@@ -3333,15 +3080,8 @@ public partial class MainWindow : System.Windows.Window
 
     private static IReadOnlyList<OcrLine> ExtractOcrLines(OcrReadResult result)
     {
-        if (result.PositionedLines is { Count: > 0 })
-            return result.PositionedLines
-                .Select(line => new OcrLine(line.Text.Trim(), NormalizeOcr(line.Text), line.Y, line.Height))
-                .Where(line => line.Normalized.Length >= 2)
-                .OrderBy(line => line.Y)
-                .ToArray();
-
-        return result.Text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => new OcrLine(line.Trim(), NormalizeOcr(line), -1, 0))
+        return OcrMessageParser.Extract(result)
+            .Select(line => new OcrLine(line.Body, NormalizeOcr(line.Body), line.Y, line.Height))
             .Where(line => line.Normalized.Length >= 2)
             .ToArray();
     }
@@ -3379,7 +3119,6 @@ public partial class MainWindow : System.Windows.Window
     private static string Shorten(string value, int max) => value.Length <= max ? value : value[..max] + "…";
     private static string ShortenLines(string value, int max) => Shorten(value.Trim(), max);
     private sealed record OcrLine(string Original, string Normalized, int Y, int Height);
-    private sealed record TranslationQueueItem(string Text, int SkippedCount);
     private sealed record TranslationBatchResult(string Text, bool UsedSafeBriefing);
     private sealed record SystemDiagnosticReport(int BlockingIssues, int RepairableIssues, IReadOnlyList<string> Lines);
     private static string RegionDescription(CaptureRegion r) => $"선택됨 · {r.Width} × {r.Height}px  ({r.X}, {r.Y})";
@@ -3395,8 +3134,11 @@ public partial class MainWindow : System.Windows.Window
 
     private void Window_OnClosing(object? sender, CancelEventArgs e)
     {
+        _windowLifetime.Cancel();
+        _paddleOperation?.Cancel();
+        _paddleOcr.Dispose();
         _ocrCancellation?.Cancel();
-        _translationQueueCancellation?.Cancel();
+        _incomingQueue?.Dispose();
         _gameHotkeyTimer?.Stop();
         _liteMemoryTimer?.Stop();
         _hotkey?.Dispose();
@@ -3405,6 +3147,6 @@ public partial class MainWindow : System.Windows.Window
         StoreOverlayBounds();
         _settingsService.Save(_settings);
         _overlay?.Close();
-        _dlxDocker.StopManagedContainerOnExit(StopDlxOnExitCheck?.IsChecked == true);
+        _ocrRegionPreview?.Close();
     }
 }

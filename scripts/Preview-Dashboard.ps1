@@ -1,4 +1,4 @@
-param([int]$Width = 1340, [int]$Height = 860, [ValidateSet(96,120,144,192)][int]$Dpi = 96)
+param([int]$Width = 1340, [int]$Height = 860, [ValidateSet(96,120,144,192)][int]$Dpi = 96, [switch]$ExpandOcr)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 $root = Split-Path $PSScriptRoot -Parent
@@ -17,6 +17,7 @@ $markup = $markup -replace '\s+\w+="\w+_On\w+"', ''
 $markup = $markup.Replace('Source="Themes/Dashboard.xaml"', 'Source="' + $root.Replace('\', '/') + '/Themes/Dashboard.xaml"')
 $markup = $markup.Replace('Assets/Valtrans.ico', $root.Replace('\', '/') + '/Assets/Valtrans.ico')
 $markup = $markup.Replace('Assets/Valtrans-mark.png', $root.Replace('\', '/') + '/Assets/Valtrans-mark.png')
+$markup = $markup.Replace('Assets/Valtrans-donate.png', $root.Replace('\', '/') + '/Assets/Valtrans-donate.png')
 $markup = $markup.Replace('pack://application:,,,/Assets/Fonts/', $root.Replace('\', '/') + '/Assets/Fonts/')
 $window = [System.Windows.Markup.XamlReader]::Parse($markup)
 # Verify the actual embedded-family selection, not a silent system-font fallback.
@@ -40,12 +41,12 @@ $window.FindName('GuideNextActionText').Text = '번역 엔진을 준비한 뒤 �
 foreach ($name in @('SendTargetCombo','GameCombo','OverlayTargetCombo','TranslationProviderCombo','LocalModelCombo','TestModeCombo','TestTargetCombo','OverlayDurationCombo','OcrChatFilterCombo','OcrStabilityCombo')) {
     $window.FindName($name).SelectedIndex = 0
 }
-$map = [System.Windows.Controls.ComboBoxItem]::new()
-$map.Content = '맵 자동 · 공통'
-[void]$window.FindName('MapCombo').Items.Add($map)
-$window.FindName('MapCombo').SelectedIndex = 0
 foreach ($name in @('OcrEnCheck','OcrJpCheck','OcrKoCheck')) { $window.FindName($name).IsChecked = $true }
 $window.FindName('OcrKoCheck').IsChecked = $false
+$window.FindName('OcrEngineCombo').SelectedIndex = if ($ExpandOcr) { 1 } else { 0 }
+$window.FindName('OcrEnginePanel').IsExpanded = [bool]$ExpandOcr
+$window.FindName('OcrDetailsPanel').IsExpanded = [bool]$ExpandOcr
+if ($ExpandOcr) { $window.FindName('PaddleOcrStatusText').Text = '준비 필요 · 별도 GPU 실행 환경' }
 $pages = @('Overview','Engines','Overlay','Lab','Guide')
 $titles = @('채팅 대시보드','번역 엔진','오버레이 설정','번역 테스트 · 사전','시작 가이드 · 점검')
 $navs = @('OverviewNavigation','AdvancedModeButton','OverlayNavigation','LabNavigation','GuideNavigation')
@@ -59,7 +60,6 @@ foreach ($page in $pages) {
     $window.FindName('DashboardPageTitle').Text = $titles[[array]::IndexOf($pages, $page)]
     if ($page -eq 'Engines') {
         foreach ($n in @('HybridPanel','LitePanel','LocalAiPanel')) { $window.FindName($n).Visibility = 'Visible' }
-        foreach ($n in @('DeepLxPanel','OpenAiPanel','SimpleEnginePanel')) { $window.FindName($n).Visibility = 'Collapsed' }
     }
     if ($page -eq 'Guide') {
         foreach ($n in @('AutoRepairButton','RecommendedPrepareButton')) { $window.FindName($n).IsEnabled = $false }

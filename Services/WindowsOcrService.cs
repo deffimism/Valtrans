@@ -40,6 +40,30 @@ public sealed class WindowsOcrService
     public async Task<string> ReadAsync(Rectangle region, string languageCode)
         => (await ReadDetailedAsync(region, languageCode)).Text;
 
+    public async Task<OcrReadResult> ReadPngAsync(byte[] png, IReadOnlyCollection<string> languages,
+        string enhancementMode = OcrEnhancementModes.Auto)
+    {
+        var watch = Stopwatch.StartNew();
+        using var stream = new MemoryStream(png, writable: false);
+        using var bitmap = new Bitmap(stream);
+        if (bitmap.Width < 20 || bitmap.Height < 20 || (long)bitmap.Width * bitmap.Height > 4_000_000)
+            throw new ArgumentException("Invalid OCR image dimensions");
+        var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+        var data = bitmap.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        var bytes = new byte[bitmap.Width * bitmap.Height * 4];
+        try
+        {
+            for (var y = 0; y < bitmap.Height; y++)
+                Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), bytes, y * bitmap.Width * 4, bitmap.Width * 4);
+        }
+        finally { bitmap.UnlockBits(data); }
+        var buffer = CryptographicBuffer.CreateFromByteArray(bytes);
+        using var software = SoftwareBitmap.CreateCopyFromBuffer(buffer, BitmapPixelFormat.Bgra8,
+            bitmap.Width, bitmap.Height, BitmapAlphaMode.Ignore);
+        return await ReadFrameAsync(new CapturedFrame(software, new CapturedPixels(bytes, bitmap.Width, bitmap.Height, 0), 0),
+            languages, null, null, true, enhancementMode, 0, watch);
+    }
+
     public async Task<OcrReadResult> ReadDetailedAsync(Rectangle region, string languageCode,
         ulong? previousFrameHash = null, ulong? expectedFrameHash = null, bool autoEnhance = true)
     {
@@ -60,7 +84,17 @@ public sealed class WindowsOcrService
         var captured = await CaptureAsync(region);
         captureWatch.Stop();
         var captureMs = captureWatch.Elapsed.TotalMilliseconds;
-        using var softwareBitmap = captured.Bitmap;
+        using (captured.Bitmap)
+            return await ReadFrameAsync(captured, languageCodes, previousFrameHash, expectedFrameHash,
+                autoEnhance, enhancementMode, captureMs, totalWatch);
+    }
+
+    private async Task<OcrReadResult> ReadFrameAsync(CapturedFrame captured, IReadOnlyCollection<string> languageCodes,
+        ulong? previousFrameHash, ulong? expectedFrameHash, bool autoEnhance, string enhancementMode,
+        double captureMs, Stopwatch totalWatch)
+    {
+        var softwareBitmap = captured.Bitmap;
+        var region = new Rectangle(0, 0, captured.Pixels.Width, captured.Pixels.Height);
         if (expectedFrameHash.HasValue && expectedFrameHash.Value != captured.FrameHash)
             return new OcrReadResult("", languageCodes.FirstOrDefault() ?? "EN", captured.FrameHash, false,
                 CaptureDurationMs: captureMs, TotalDurationMs: totalWatch.Elapsed.TotalMilliseconds);
@@ -73,8 +107,28 @@ public sealed class WindowsOcrService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (selected.Length == 0) selected = new[] { "EN" };
+        // Recognition must also see Korean UI/system text. Translation language
+        // selection is enforced on extracted message bodies, not on OCR engines.
+        if (!selected.Contains("KO") && OcrEngine.IsLanguageSupported(new Language("ko-KR")))
+            selected = selected.Append("KO").ToArray();
 
         enhancementMode = OcrEnhancementModes.Normalize(enhancementMode);
+        if (enhancementMode == OcrEnhancementModes.Binary)
+        {
+            var preprocessing = Stopwatch.StartNew();
+            var binary = OcrImagePreprocessor.Binarize(captured.Pixels.Bytes, region.Width, region.Height);
+            var buffer = CryptographicBuffer.CreateFromByteArray(binary);
+            using var bitmap = SoftwareBitmap.CreateCopyFromBuffer(buffer, BitmapPixelFormat.Bgra8,
+                region.Width, region.Height, BitmapAlphaMode.Ignore);
+            preprocessing.Stop();
+            var recognition = Stopwatch.StartNew();
+            var binaryResult = await RecognizeSelectedAsync(bitmap, selected);
+            recognition.Stop();
+            return binaryResult with { FrameHash = captured.FrameHash, EnhancementUsed = true,
+                QualityScore = ScoreRecognition(binaryResult), CaptureDurationMs = captureMs,
+                RecognitionDurationMs = recognition.Elapsed.TotalMilliseconds,
+                EnhancementDurationMs = preprocessing.Elapsed.TotalMilliseconds, TotalDurationMs = totalWatch.Elapsed.TotalMilliseconds };
+        }
         var canEnhance = autoEnhance && CanEnhance(region.Width, region.Height);
         if (canEnhance && enhancementMode == OcrEnhancementModes.Enhanced)
         {
@@ -85,6 +139,27 @@ public sealed class WindowsOcrService
             var enhancedOnly = await RecognizeSelectedAsync(preferredEnhancedBitmap, selected, positionScale: 0.5);
             recognitionWatch.Stop();
             var enhancedOnlyScore = ScoreRecognition(enhancedOnly);
+            if (enhancedOnlyScore < 56 || HasRecognitionArtifacts(enhancedOnly.Text))
+            {
+                // Learned enhancement can become wrong after a map/background change.
+                // Recheck the raw image instead of locking into a blank/noisy profile.
+                recognitionWatch.Start();
+                var rescue = await RecognizeSelectedAsync(softwareBitmap, selected);
+                recognitionWatch.Stop();
+                var rescueScore = ScoreRecognition(rescue);
+                totalWatch.Stop();
+                var useRescue = rescueScore > enhancedOnlyScore && !string.IsNullOrWhiteSpace(rescue.Text);
+                return (useRescue ? rescue : enhancedOnly) with
+                {
+                    FrameHash = captured.FrameHash, EnhancementUsed = !useRescue,
+                    QualityScore = useRescue ? rescueScore : enhancedOnlyScore,
+                    RawQualityScore = rescueScore, EnhancedQualityScore = enhancedOnlyScore,
+                    ComparedVariants = true, CaptureDurationMs = captureMs,
+                    RecognitionDurationMs = recognitionWatch.Elapsed.TotalMilliseconds,
+                    EnhancementDurationMs = enhanceWatch.Elapsed.TotalMilliseconds,
+                    TotalDurationMs = totalWatch.Elapsed.TotalMilliseconds
+                };
+            }
             totalWatch.Stop();
             return enhancedOnly with
             {
@@ -129,7 +204,8 @@ public sealed class WindowsOcrService
         var enhanced = await RecognizeSelectedAsync(enhancedBitmap, selected, positionScale: 0.5);
         enhancedWatch.Stop();
         var enhancedScore = ScoreRecognition(enhanced);
-        var useEnhanced = enhancedScore >= rawScore + 1.5 || raw.Text.Length == 0 || HasRecognitionArtifacts(raw.Text);
+        var useEnhanced = !string.IsNullOrWhiteSpace(enhanced.Text) &&
+            (enhancedScore >= rawScore + 1.5 || raw.Text.Length == 0);
         totalWatch.Stop();
         return (useEnhanced ? enhanced : raw) with
         {
@@ -144,6 +220,72 @@ public sealed class WindowsOcrService
             EnhancementDurationMs = preprocessingWatch.Elapsed.TotalMilliseconds,
             TotalDurationMs = totalWatch.Elapsed.TotalMilliseconds
         };
+    }
+
+    public async Task<DualOcrReadResult> ReadDualAsync(Rectangle fullRegion, Rectangle latestRegion,
+        IReadOnlyCollection<string> languages, ulong? previousLatestHash, string? previousLatestText,
+        bool forceFull, bool autoEnhance = true, string enhancementMode = OcrEnhancementModes.Auto)
+    {
+        if (fullRegion.Width < 20 || fullRegion.Height < 20 || !fullRegion.Contains(latestRegion) ||
+            latestRegion.Width < 20 || latestRegion.Height < 20)
+            throw new ArgumentException("최신 채팅 영역은 전체 OCR 영역 안에 있어야 합니다.");
+        var watch = Stopwatch.StartNew();
+        var captured = await CaptureAsync(fullRegion);
+        return await ReadDualFrameAsync(captured,
+            new Rectangle(latestRegion.X - fullRegion.X, latestRegion.Y - fullRegion.Y, latestRegion.Width, latestRegion.Height),
+            languages, previousLatestHash, previousLatestText, forceFull, autoEnhance, enhancementMode, watch);
+    }
+
+    internal async Task<DualOcrReadResult> ReadDualFrameAsync(CapturedFrame captured, Rectangle latestRegion,
+        IReadOnlyCollection<string> languages, ulong? previousLatestHash, string? previousLatestText,
+        bool forceFull, bool autoEnhance, string enhancementMode, Stopwatch watch)
+    {
+        using (captured.Bitmap)
+        {
+            var captureMs = watch.Elapsed.TotalMilliseconds;
+            var x = latestRegion.X;
+            var y = latestRegion.Y;
+            var latestPixels = CropPixels(captured.Pixels, new Rectangle(x, y, latestRegion.Width, latestRegion.Height));
+            if (!forceFull && previousLatestHash == latestPixels.FrameHash)
+                return new DualOcrReadResult(new OcrReadResult("", "EN", captured.FrameHash, false),
+                    latestPixels.FrameHash, previousLatestText ?? "", false, -1, "최신 화면 변화 없음 · OCR 생략");
+            using var latestBitmap = SoftwareBitmap.CreateCopyFromBuffer(CryptographicBuffer.CreateFromByteArray(latestPixels.Bytes),
+                BitmapPixelFormat.Bgra8, latestPixels.Width, latestPixels.Height, BitmapAlphaMode.Ignore);
+            var latest = await ReadFrameAsync(new CapturedFrame(latestBitmap, latestPixels, latestPixels.FrameHash),
+                languages, null, null, autoEnhance, enhancementMode, 0, Stopwatch.StartNew());
+            var fingerprint = DualOcrRegions.Fingerprint(latest.Text);
+            var latestCount = latest.PositionedLines?.Count ?? 0;
+            if (!forceFull && fingerprint == previousLatestText)
+                return new DualOcrReadResult(latest with { FrameChanged = false }, latestPixels.FrameHash,
+                    fingerprint, false, latestCount, "최신 본문 변화 없음 · 전체 OCR 생략");
+
+            var full = await ReadFrameAsync(captured, languages, null, null, autoEnhance, enhancementMode, 0, Stopwatch.StartNew());
+            var combined = DualOcrRegions.Merge(full, latest, x, y) with
+            {
+                CaptureDurationMs = captureMs,
+                RecognitionDurationMs = full.RecognitionDurationMs + latest.RecognitionDurationMs,
+                EnhancementDurationMs = full.EnhancementDurationMs + latest.EnhancementDurationMs,
+                TotalDurationMs = watch.Elapsed.TotalMilliseconds
+            };
+            return new DualOcrReadResult(combined, latestPixels.FrameHash, fingerprint, true, latestCount,
+                forceFull ? "전체 확인 · 기준 화면/주기 점검" : "최신 변화 → 전체 채팅 보완");
+        }
+    }
+
+    internal static CapturedPixels CropPixels(CapturedPixels full, Rectangle region)
+    {
+        if (!new Rectangle(0, 0, full.Width, full.Height).Contains(region) || region.Width <= 0 || region.Height <= 0)
+            throw new ArgumentOutOfRangeException(nameof(region));
+        var bytes = new byte[region.Width * region.Height * 4];
+        for (var row = 0; row < region.Height; row++)
+            Buffer.BlockCopy(full.Bytes, ((region.Y + row) * full.Width + region.X) * 4,
+                bytes, row * region.Width * 4, region.Width * 4);
+        var hash = ComputeTextHash(region.Width, region.Height, (x, y) =>
+        {
+            var offset = (y * region.Width + x) * 4;
+            return bytes[offset] | bytes[offset + 1] << 8 | bytes[offset + 2] << 16 | bytes[offset + 3] << 24;
+        });
+        return new CapturedPixels(bytes, region.Width, region.Height, hash);
     }
 
     private async Task<OcrReadResult> RecognizeSelectedAsync(SoftwareBitmap bitmap, IReadOnlyCollection<string> selected,
@@ -207,6 +349,7 @@ public sealed class WindowsOcrService
 
     private static bool HasRecognitionArtifacts(string text) =>
         text.Contains('�') || text.Contains("??", StringComparison.Ordinal) ||
+        text.Contains("``", StringComparison.Ordinal) ||
         text.Contains("<unk>", StringComparison.OrdinalIgnoreCase) ||
         text.Count(ch => ch is '|' or '¦' or '□') >= 3;
 
@@ -370,7 +513,7 @@ public sealed class WindowsOcrService
         for (var row = 0; row < rows; row++)
         for (var column = 0; column < columns; column++)
         {
-            var brightSamples = 0;
+            var brightMask = 0;
             for (var sy = 0; sy < samplesPerAxis; sy++)
             for (var sx = 0; sx < samplesPerAxis; sx++)
             {
@@ -382,10 +525,13 @@ public sealed class WindowsOcrService
                 var red = (pixel >> 16) & 0xff;
                 var maximum = Math.Max(red, Math.Max(green, blue));
                 var luminance = (red * 3 + green * 6 + blue) / 10;
-                if (maximum >= 160 && luminance >= 105) brightSamples++;
+                if (maximum >= 160 && luminance >= 105)
+                    brightMask |= 1 << (sy * samplesPerAxis + sx);
             }
 
-            hash ^= (byte)((brightSamples + 1) / 2);
+            // Preserve sample positions, not only the number of bright pixels.
+            // Two different glyphs can have equal brightness counts in a cell.
+            hash ^= (ushort)brightMask;
             hash *= prime;
         }
 
@@ -400,6 +546,8 @@ internal sealed record OcrRecognition(string Text, IReadOnlyList<OcrPositionedLi
     public static OcrRecognition Empty { get; } = new("", Array.Empty<OcrPositionedLine>());
 }
 public sealed record OcrPositionedWord(string Text, int X, int Y, int Width, int Height);
+public sealed record DualOcrReadResult(OcrReadResult Result, ulong LatestHash, string LatestText,
+    bool FullChecked, int LatestLineCount, string Route);
 public sealed record OcrPositionedLine(string Text, int X, int Y, int Width, int Height,
     IReadOnlyList<OcrPositionedWord> Words);
 public sealed record OcrReadResult(string Text, string DetectedLanguage, ulong FrameHash = 0,
@@ -414,6 +562,7 @@ public static class OcrEnhancementModes
     public const string Auto = "Auto";
     public const string Raw = "Raw";
     public const string Enhanced = "Enhanced";
+    public const string Binary = "Binary";
 
-    public static string Normalize(string value) => value is Raw or Enhanced ? value : Auto;
+    public static string Normalize(string value) => value is Raw or Enhanced or Binary ? value : Auto;
 }

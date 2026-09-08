@@ -32,7 +32,7 @@ try {
         if ($model -notin $installed) { Write-Output "SKIP not installed: $model"; continue }
         $settings = [Valtrans.Models.AppSettings]::new()
         $settings.TranslationProvider = 'Ollama'; $settings.LocalAiModel = $model
-        $settings.Game = 'VALORANT'; $settings.Map = 'Ascent'
+        $settings.Game = 'VALORANT'
         if ($settings.PSObject.Properties['ServerRegion']) { $settings.ServerRegion = 'JP' }
         $runtimeAllocation = $null
         foreach ($case in $cases) {

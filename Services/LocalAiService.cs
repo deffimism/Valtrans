@@ -10,7 +10,7 @@ namespace Valtrans.Services;
 public sealed class LocalAiService
 {
     public const string BaseUrl = "http://localhost:11434";
-    public const string OpenAiBaseUrl = BaseUrl + "/v1";
+    public const string CompletionBaseUrl = BaseUrl + "/v1";
     public const string HyMtBaseModelName = "hf.co/tencent/Hy-MT2-1.8B-GGUF:Q4_K_M";
     public const string HyMtModelName = "valtrans-hymt2:1.8b";
     public const string HyMtQualityModelName = "valtrans-hymt2:7b";

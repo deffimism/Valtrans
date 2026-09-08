@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -Path (Resolve-Path -LiteralPath $AssemblyPath)
 $glossary = [Valtrans.Services.GlossaryService]::new()
 $settings = [Valtrans.Models.AppSettings]::new()
-$settings.Game = 'VALORANT'; $settings.Map = 'Ascent'; $settings.TranslationProvider = 'Lite'
+$settings.Game = 'VALORANT'; $settings.TranslationProvider = 'Lite'
 $rejections = @(
     @('wait until I flash','??','KO'),
     @('wait until I flash','기다려 <unk>','KO'),

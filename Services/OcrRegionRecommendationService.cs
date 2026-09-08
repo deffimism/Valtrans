@@ -31,23 +31,23 @@ public static class OcrRegionRecommendationService
         };
     }
 
-    // Starting preset based on the supplied 16:9 chat screenshots, not a detected
-    // or guaranteed game layout. Scale from client pixels (never apply DPI twice).
-    // At 1920×1080: x=8, y=900, width=480, height=144; leave 36px below
-    // for the input row. Keep the sender prefix for the downstream chat parser.
+    // Full expanded chat panel measured from the user's 3837×2157 screenshot.
+    // Normalized client edges: left 1.25%, top 72.5%, right 24%, bottom 95.2%.
+    // Keep sender/channel prefixes, but exclude the input row and scrollbar.
+    // This is a 16:9 starting preset, not detection of every possible HUD layout.
+    // Round edges once in physical client pixels; never apply Windows DPI again.
     private static CaptureRegion RecommendValorant(Rectangle bounds)
     {
-        var scale = bounds.Height / 1080.0;
-        var width = Math.Clamp((int)Math.Round(480 * scale), 20, bounds.Width);
-        var height = Math.Clamp((int)Math.Round(144 * scale), 20, bounds.Height);
-        var left = Math.Clamp((int)Math.Round(8 * scale), 0, bounds.Width - width);
-        var bottom = Math.Clamp((int)Math.Round(36 * scale), 0, bounds.Height - height);
+        var left = Math.Clamp((int)Math.Round(bounds.Width * 0.0125), 0, bounds.Width - 20);
+        var top = Math.Clamp((int)Math.Round(bounds.Height * 0.725), 0, bounds.Height - 20);
+        var right = Math.Clamp((int)Math.Round(bounds.Width * 0.24), left + 20, bounds.Width);
+        var bottom = Math.Clamp((int)Math.Round(bounds.Height * 0.952), top + 20, bounds.Height);
         return new CaptureRegion
         {
             X = bounds.Left + left,
-            Y = bounds.Bottom - bottom - height,
-            Width = width,
-            Height = height
+            Y = bounds.Top + top,
+            Width = right - left,
+            Height = bottom - top
         };
     }
 }

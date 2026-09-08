@@ -6,20 +6,7 @@ namespace Valtrans.Models;
 public sealed class AppSettings
 {
     public string TranslationProvider { get; set; } = "Hybrid";
-    public string ApiBaseUrl { get; set; } = "https://api.openai.com/v1";
-    public string DeepLxUrl { get; set; } = "https://deeplx.1stg.me/translate";
-    public string PublicDeepLxUrl { get; set; } = "https://deeplx.1stg.me/translate";
-    public string DeepLxMode { get; set; } = "Public";
-    public bool AutoStartDockerDesktop { get; set; } = false;
-    public bool StopLocalDlxOnExit { get; set; } = true;
-    public bool DeepLxAutoFallback { get; set; } = true;
-    [JsonIgnore]
-    public string ApiKey { get; set; } = "";
-    public string ApiKeyProtected { get; set; } = "";
-    [JsonIgnore]
-    public string DeepLApiKey { get; set; } = "";
-    public string DeepLApiKeyProtected { get; set; } = "";
-    public string Model { get; set; } = "gpt-4o-mini";
+    public string Model { get; set; } = "valtrans-hymt2:1.8b";
     public string LocalAiModel { get; set; } = "valtrans-hymt2:1.8b";
     public string SendTargetLanguage { get; set; } = "EN";
     public string OverlayTargetLanguage { get; set; } = "KO";
@@ -27,18 +14,21 @@ public sealed class AppSettings
     public int OverlayDisplaySeconds { get; set; } = 15;
     public double OverlayFontSize { get; set; } = 17;
     public string OcrLanguage { get; set; } = "AUTO";
-    public int SettingsSchemaVersion { get; set; } = 22;
+    public string OcrEngine { get; set; } = "Windows";
+    public string PaddleOcrRuntime { get; set; } = "";
+    public int SettingsSchemaVersion { get; set; } = 23;
     public bool ShowStartupGuide { get; set; } = true;
     public bool ShowAdvancedSettings { get; set; }
     public bool AutoSwitchGameProfile { get; set; } = true;
     public string Game { get; set; } = "Auto";
-    public string Map { get; set; } = "Auto";
     public string ServerRegion { get; set; } = "Auto";
     public string Hotkey { get; set; } = "\\";
     public int OcrIntervalMs { get; set; } = 1200;
     public int OcrStabilizationMs { get; set; } = 350;
     public bool OcrAutoEnhance { get; set; } = true;
     public bool OcrTwoFrameConsensus { get; set; } = true;
+    public bool DualRegionOcr { get; set; } = true;
+    public Dictionary<string, RelativeOcrRegion> LatestOcrRegions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public int OcrConsensusDelayMs { get; set; } = 180;
     public string OcrChatFilterMode { get; set; } = "Briefing";
     public bool OverlayClickThrough { get; set; }
@@ -52,7 +42,6 @@ public sealed class AppSettings
     public Dictionary<string, CaptureRegion> CaptureRegionsByGame { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, CaptureProfileMetadata> CaptureProfileMetadataByGame { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, OcrEnhancementProfile> OcrEnhancementProfiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-    public Dictionary<string, string> MapsByGame { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> CustomGlossary { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 

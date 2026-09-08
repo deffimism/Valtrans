@@ -62,7 +62,6 @@ public sealed class DiagnosticLogService
             .AppendLine($"Provider: {SanitizeToken(settings.TranslationProvider)}")
             .AppendLine($"Local model: {SanitizeToken(settings.LocalAiModel)}")
             .AppendLine($"Game profile: {SanitizeToken(settings.Game)}")
-            .AppendLine($"Map dictionary: {SanitizeToken(settings.Map)}")
             .AppendLine($"OCR languages: {string.Join('/', settings.OcrLanguages.Select(SanitizeToken))}")
             .AppendLine($"OCR region size: {settings.CaptureRegion.Width}x{settings.CaptureRegion.Height}")
             .AppendLine($"Saved OCR profiles: {settings.CaptureRegionsByGame.Count}")
