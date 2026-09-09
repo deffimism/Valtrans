@@ -70,7 +70,7 @@ def main():
                     return_dict=True, return_tensors="pt", processor_kwargs={"images_kwargs": {"size": {
                         "shortest_edge": processor.image_processor.size["shortest_edge"],
                         "longest_edge": 1280 * 28 * 28}}}).to(model.device)
-                output = model.generate(**inputs, max_new_tokens=512, max_time=12,
+                output = model.generate(**inputs, max_new_tokens=128, max_time=12,
                                         do_sample=False, use_cache=True)
                 tokens = output[0][inputs["input_ids"].shape[-1]:]
                 eos = model.generation_config.eos_token_id

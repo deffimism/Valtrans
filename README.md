@@ -6,7 +6,7 @@ Windows 게임 채팅 번역 · Local game chat translation for Windows
 
 [한국어 사용법](#korean) · [English guide](#english)
 
-> **작성 기준 버전 / Documentation baseline: v0.2.1-beta**<br>
+> **작성 기준 버전 / Documentation baseline: v0.2.2-beta**<br>
 > **검토일 / Reviewed: 2026-09-08**<br>
 > 현재 화면과 사용 흐름을 기준으로 작성했습니다. 사용법이 변하지 않으면 앱 버전이 올라가도 README는 업데이트되지 않을 수 있습니다.<br>
 > This guide describes the interface and workflow at the version above. It may remain unchanged across releases when the usage instructions still apply.

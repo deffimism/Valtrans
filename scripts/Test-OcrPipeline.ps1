@@ -73,7 +73,9 @@ public static class OcrPipelineChecks {
 '@
 [OcrPipelineChecks]::Run().GetAwaiter().GetResult()
 $similar = [Valtrans.MainWindow].GetMethod('AreSimilarOcrText', [Reflection.BindingFlags]'Static,NonPublic')
-foreach ($pair in @(@('pushmidnow','nopushmidnow'), @('twoleftmaybe','twoleft'), @('ミッド二人いる','ミッド三人いる'))) {
+$midTwo = -join (0x30DF, 0x30C3, 0x30C9, 0x4E8C, 0x4EBA, 0x3044, 0x308B | ForEach-Object { [char]$_ })
+$midThree = -join (0x30DF, 0x30C3, 0x30C9, 0x4E09, 0x4EBA, 0x3044, 0x308B | ForEach-Object { [char]$_ })
+foreach ($pair in @(@('pushmidnow','nopushmidnow'), @('twoleftmaybe','twoleft'), @($midTwo, $midThree))) {
     if ($similar.Invoke($null, $pair)) { throw "Important fact deduplicated: $pair" }
 }
 'PASS: system selection/wraps, nickname/input removal, negation/count dedup, line failure isolation, bounded queue, stop cancellation'

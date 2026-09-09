@@ -1,6 +1,6 @@
 # Paddle OCR 실험 모드 / Experimental Paddle OCR
 
-v0.2.1-beta의 기본 OCR은 PaddleOCR-VL입니다. 시작 가이드에서 번역 엔진과 OCR을 함께 준비할 수 있습니다.
+v0.2.2-beta의 기본 OCR은 PaddleOCR-VL입니다. 시작 가이드에서 번역 엔진과 OCR을 함께 준비할 수 있습니다.
 기존 Windows OCR 설정도 업데이트 후 첫 실행에서 Paddle로 한 번 전환됩니다. 이후에는 Windows OCR을 직접 선택하고 저장할 수 있습니다. NVIDIA GPU 환경이 맞지 않으면 Windows OCR을 대안으로 선택하세요.
 
 ## 한국어
@@ -34,7 +34,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Ocr\Setup.ps1 -RuntimeDire
 
 ## English
 
-PaddleOCR-VL is the default in v0.2.1-beta. Existing Windows OCR settings switch to Paddle once after this update; a later manual Windows selection is preserved after saving. Use Windows OCR as a lighter alternative if needed.
+PaddleOCR-VL is the default in v0.2.2-beta. Existing Windows OCR settings switch to Paddle once after this update; a later manual Windows selection is preserved after saving. Use Windows OCR as a lighter alternative if needed.
 
 Click **시작 가이드 · 점검 → 권장 엔진 준비** for translation and OCR setup, or **OCR 설치 · 준비** in the guide for OCR only.
 After approval, missing uv, private Python, CUDA libraries and the official model are installed automatically, then the OCR model is prepared. Progress and errors stay in the guide. Existing runtimes are reused.

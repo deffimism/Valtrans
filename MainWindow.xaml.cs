@@ -1696,14 +1696,19 @@ public partial class MainWindow : System.Windows.Window
         }
     }
 
-    private async Task<OcrReadResult> ReadPaddleRegionAsync(System.Drawing.Rectangle region, CancellationToken token)
+    private async Task<OcrReadResult> ReadPaddleRegionAsync(System.Drawing.Rectangle region, CancellationToken token,
+        CapturedFramePng? captured = null)
     {
         var watch = Stopwatch.StartNew();
-        var png = await _ocr.CapturePngAsync(region);
+        captured ??= await _ocr.CaptureFramePngAsync(region);
         token.ThrowIfCancellationRequested();
-        var captureMs = watch.Elapsed.TotalMilliseconds;
-        var result = await _paddleOcr.ReadAsync(png, _settings.PaddleOcrRuntime, token);
-        return result with { CaptureDurationMs = captureMs, TotalDurationMs = watch.Elapsed.TotalMilliseconds };
+        var result = await _paddleOcr.ReadAsync(captured.Png, _settings.PaddleOcrRuntime, token);
+        return result with
+        {
+            FrameHash = captured.FrameHash,
+            CaptureDurationMs = captured.CaptureDurationMs,
+            TotalDurationMs = watch.Elapsed.TotalMilliseconds
+        };
     }
 
     private async void TestOcr_OnClick(object sender, RoutedEventArgs e)
@@ -2010,7 +2015,8 @@ public partial class MainWindow : System.Windows.Window
                 var paddle = _settings.OcrEngine == "Paddle";
                 if (paddle)
                 {
-                    candidateHash = await _ocr.CaptureFrameHashAsync(region);
+                    var captured = await _ocr.CaptureFramePngAsync(region);
+                    candidateHash = captured.FrameHash;
                     if (_lastOcrFrameHash == candidateHash && DateTime.UtcNow - lastRecognitionUtc < TimeSpan.FromSeconds(10))
                     {
                         RecordOcrStage("화면 변화 없음 · Paddle OCR 생략");
@@ -2018,13 +2024,14 @@ public partial class MainWindow : System.Windows.Window
                         continue;
                     }
                     RecordOcrStage("Paddle OCR 인식 중 · 전체 채팅 1회");
-                    ocrResult = (await ReadPaddleRegionAsync(region, cancellationToken)) with { FrameHash = candidateHash };
+                    ocrResult = await ReadPaddleRegionAsync(region, cancellationToken, captured);
                     lastRecognitionUtc = DateTime.UtcNow;
                 }
                 else if (_settings.DualRegionOcr)
                 {
-                    if (_settings.OcrStabilizationMs > 0)
-                        await Task.Delay(_settings.OcrStabilizationMs, cancellationToken);
+                    var stabilizationMs = GetAdaptiveStabilizationDelay();
+                    if (stabilizationMs > 0)
+                        await Task.Delay(stabilizationMs, cancellationToken);
                     dualRead = await _ocr.ReadDualAsync(region, latestRegion, _settings.OcrLanguages,
                         latestHash, latestText, _ocrBaselinePending || _ocrConsensusRejectedFrames > 0 ||
                         DateTime.UtcNow - lastFullCheckUtc >= TimeSpan.FromSeconds(10),
@@ -2055,8 +2062,9 @@ public partial class MainWindow : System.Windows.Window
 
                 _unchangedOcrFrames = 0;
 
-                if (_settings.OcrStabilizationMs > 0)
-                    await Task.Delay(_settings.OcrStabilizationMs, cancellationToken);
+                var stabilizationDelay = GetAdaptiveStabilizationDelay();
+                if (stabilizationDelay > 0)
+                    await Task.Delay(stabilizationDelay, cancellationToken);
 
                 var enhancementMode = GetOcrEnhancementMode();
                 lastRecognitionUtc = DateTime.UtcNow;
@@ -2509,6 +2517,13 @@ public partial class MainWindow : System.Windows.Window
         "Performance" => 100,
         "Efficient" => Math.Min(140, _settings.OcrConsensusDelayMs),
         _ => _settings.OcrConsensusDelayMs
+    };
+
+    private int GetAdaptiveStabilizationDelay() => _adaptiveOcrMode switch
+    {
+        "Performance" => Math.Min(80, _settings.OcrStabilizationMs / 4),
+        "Efficient" => Math.Min(180, _settings.OcrStabilizationMs / 2),
+        _ => _settings.OcrStabilizationMs
     };
 
     private void RecordOcrPerformance(double captureMs, double recognitionMs, double consensusMs)

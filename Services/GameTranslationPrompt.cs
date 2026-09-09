@@ -49,8 +49,9 @@ public static class GameTranslationPrompt
                 "'not A main, B heaven' -> 'A 메인 아님, B 헤븐'; 'wait until I flash' -> '내가 섬광 쓸 때까지 기다려'.",
         "JP" => "'B 헤븐에 두명' -> 'Bヘブン2人'; '아마 B 헤븐 두명' -> 'Bヘブンたぶん2人'; " +
                 "'A 메인 말고 B 헤븐' -> 'AメインじゃなくBヘブン'; '내가 섬광 쓸 때까지 기다려' -> '自分がフラッシュを入れるまで待って'.",
-        _ => "'B 헤븐에 두명' -> '2 B Heaven'; '아마 B 헤븐 두명' -> 'maybe 2 B Heaven'; " +
+        _ => "'왼쪽 조심해' -> 'watch left'; '왼쪽으로 가지 마' -> \"don't go left\"; '왼쪽에 적이 있다' -> 'enemy left'; " +
+             "'B 헤븐에 두명' -> '2 B Heaven'; '아마 B 헤븐 두명' -> 'maybe 2 B Heaven'; " +
              "'A 메인 말고 B 헤븐' -> 'not A Main, B Heaven'; '아군 둘 B 헤븐' -> '2 teammates B Heaven'; " +
-             "'내가 섬광 쓸 때까지 기다려' -> 'wait until I flash'; '왼쪽으로 가지 마' -> \"don't go left\"."
+             "'내가 섬광 쓸 때까지 기다려' -> 'wait until I flash'; '左見て' -> 'watch left'; '右見て' -> 'watch right'."
     };
 }

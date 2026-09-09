@@ -26,14 +26,20 @@ public sealed class WindowsOcrService
     }
 
     public async Task<byte[]> CapturePngAsync(Rectangle region)
+        => (await CaptureFramePngAsync(region)).Png;
+
+    public async Task<CapturedFramePng> CaptureFramePngAsync(Rectangle region)
     {
-        if (region.Width < 20 || region.Height < 20) return Array.Empty<byte>();
+        if (region.Width < 20 || region.Height < 20)
+            return new CapturedFramePng(0, Array.Empty<byte>(), 0);
         return await Task.Run(() =>
         {
+            var watch = Stopwatch.StartNew();
             using var bitmap = CaptureBitmap(region);
+            var hash = ComputeFrameHash(bitmap);
             using var stream = new MemoryStream();
             bitmap.Save(stream, ImageFormat.Png);
-            return stream.ToArray();
+            return new CapturedFramePng(hash, stream.ToArray(), watch.Elapsed.TotalMilliseconds);
         }).ConfigureAwait(false);
     }
 
@@ -539,6 +545,7 @@ public sealed class WindowsOcrService
     }
 }
 
+public sealed record CapturedFramePng(ulong FrameHash, byte[] Png, double CaptureDurationMs);
 internal sealed record CapturedFrame(SoftwareBitmap Bitmap, CapturedPixels Pixels, ulong FrameHash);
 internal sealed record CapturedPixels(byte[] Bytes, int Width, int Height, ulong FrameHash);
 internal sealed record OcrRecognition(string Text, IReadOnlyList<OcrPositionedLine> Lines)

@@ -16,6 +16,14 @@ public sealed class TranslationRegressionService
             new RegressionCase("FPS 약어 nt", "nt", "KO", "아깝다"),
             new RegressionCase("FPS 약어 mb", "mb", "EN", "my bad"),
             new RegressionCase("방향 경고", "왼쪽 조심해", "EN", "watch left"),
+            new RegressionCase("방향 금지", "왼쪽으로 가지 마", "EN", "don't go left"),
+            new RegressionCase("일본어 방향", "左見て", "EN", "watch left"),
+            new RegressionCase("일본어 방향 우", "右見て", "EN", "watch right"),
+            new RegressionCase("일본어 적·인원", "左に敵が一人いる", "KO", "왼쪽 적 1명"),
+            new RegressionCase("한국어 적 존재", "왼쪽에 적이 있다", "EN", "enemy left"),
+            new RegressionCase("헤더 제거·일본어", "(팀) Player: わかりました", "KO", "확인"),
+            new RegressionCase("인원·콜아웃", "B 헤븐에 두 명", "EN", "2 B Heaven"),
+            new RegressionCase("섬광 대기", "내가 섬광 쓸 때까지 기다려", "EN", "wait until I flash"),
             new RegressionCase("일본어 부정", "右に敵はいない", "KO", "오른쪽 · 없음"),
             new RegressionCase("인원·위치", "미드에 적 2명 있어", "EN", "2 mid"),
             new RegressionCase("행동 부정", "로테하지 마", "EN", "don't rotate"),
@@ -134,6 +142,7 @@ public sealed class TranslationRegressionService
 
     private string TranslateCore(string source, string targetLanguage, AppSettings settings)
     {
+        source = ChatTextSanitizer.StripChatPrefix(source).Trim();
         string translated;
         if (_glossary.TryTranslateExactShortcut(source, targetLanguage, out translated, settings) ||
             _glossary.TryTranslateStructuredCallout(source, targetLanguage, settings, out translated))

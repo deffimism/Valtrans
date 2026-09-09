@@ -30,6 +30,9 @@ public sealed class TranslatorService
         cancellationToken.ThrowIfCancellationRequested();
         text = text.Trim();
         if (text.Length == 0) return text;
+        text = preserveLines && text.Contains('\n')
+            ? ChatTextSanitizer.ContentForLanguageDetection(text)
+            : ChatTextSanitizer.StripChatPrefix(text).Trim();
         if (!ChatTextSanitizer.HasMeaningfulContent(text)) return text;
         text = ChatTextSanitizer.ConvertCommonRomanizedJapanese(text);
         if (preserveLines && text.Contains('\n'))
@@ -162,39 +165,9 @@ public sealed class TranslatorService
         var baseUrl = LocalAiService.CompletionBaseUrl;
         var model = LocalAiService.NormalizeModelName(localModel ?? settings.LocalAiModel);
 
-        // Do not pre-expand ambiguous words or replace quantities with opaque placeholders.
-        // The model needs the original sentence to preserve relationships and ordinary meanings.
-        var normalized = text;
-        var targetName = targetLanguage switch { "KO" => "Korean", "JP" => "Japanese", _ => "English" };
-        var game = settings.Game == "Auto" ? "VALORANT or Apex Legends" : settings.Game;
-        var lineRule = preserveLines
-            ? "Keep the same line count and order. Return only translated lines."
-            : "Return exactly one short line with no explanation or quotation marks.";
-        object[] messages;
-        {
-            var sourceCode = DetectSourceLanguage(text);
-            var (sourceName, sourceTag) = LanguageDetails(sourceCode);
-            var (_, targetTag) = LanguageDetails(targetLanguage);
-            string localPrompt;
-            if (LocalAiService.IsHyMtModel(model) || model.StartsWith("qwen3:", StringComparison.OrdinalIgnoreCase))
-            {
-                localPrompt = (model.StartsWith("qwen3:", StringComparison.OrdinalIgnoreCase) ? "/no_think\n" : "") +
-                    GameTranslationPrompt.Build(text, targetLanguage, settings, _glossary, preserveLines);
-            }
-            else
-            {
-                localPrompt = $"""
-                    You are a professional {sourceName} ({sourceTag}) to {targetName} ({targetTag}) translator. Your goal is to accurately convey the meaning and nuances of the original {sourceName} text while adhering to {targetName} grammar, vocabulary, and cultural sensitivities.
-                    Context: {game}, server region hint {GameTranslationPrompt.NormalizeRegion(settings.ServerRegion)}. Natural team chat, not a summary. Preserve meaning, negation, conditions and quantities. {lineRule}
-                    Reference terminology: {_glossary.BuildRelevantPromptGlossary(text, targetLanguage, settings)}
-                    Produce only the {targetName} translation, without any additional explanations or commentary. Please translate the following {sourceName} text into {targetName}:
-
-
-                    {normalized}
-                    """;
-            }
-            messages = new object[] { new { role = "user", content = localPrompt } };
-        }
+        var localPrompt = (model.StartsWith("qwen3:", StringComparison.OrdinalIgnoreCase) ? "/no_think\n" : "") +
+            GameTranslationPrompt.Build(text, targetLanguage, settings, _glossary, preserveLines);
+        var messages = new object[] { new { role = "user", content = localPrompt } };
         if (model.StartsWith("qwen3:", StringComparison.OrdinalIgnoreCase) ||
             LocalAiService.IsHyMtModel(model))
         {

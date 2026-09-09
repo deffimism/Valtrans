@@ -469,6 +469,10 @@ public sealed partial class GlossaryService
         translated = "";
         if (text.Length == 0) return false;
         if (TryTranslateExactDirectionalBriefing(text, target, out translated)) return true;
+        if (TryTranslateWatchDirection(text, target, out translated)) return true;
+        if (TryTranslateMovementProhibition(text, target, settings, out translated)) return true;
+        if (TryTranslateEnemyPresenceBriefing(text, target, settings, out translated)) return true;
+        if (TryTranslateFlashWait(text, target, out translated)) return true;
         if (TryTranslateSlangCallout(text, target, settings, out translated)) return true;
 
         var noEnemyPatterns = new[]
@@ -565,7 +569,7 @@ public sealed partial class GlossaryService
         {
             @"^(?<location>.+?)(?:에|에서)\s*(?:(?:적|상대)(?:이|가)?\s*)?(?<count>한|두|세|네|\d+)\s*명(?:이|가)?\s*(?:있(?:습니다|어요|어|음|다))?\s*[.!]?$",
             @"^(?:적|상대)\s*(?<count>한|두|세|네|\d+)\s*명\s*(?<location>.+?)\s*[.!]?$",
-            @"^(?<location>.+?)(?:に|で)\s*(?:敵(?:が)?\s*)?(?<count>一|二|三|四|\d+)\s*(?:人)?\s*(?:いる|います)?\s*[。.!]?$",
+            @"^(?<location>.+?)(?:に|で)\s*(?:敵(?:が)?\s*)?(?<count>一人|二人|三人|四人|一|二|三|四|\d+)\s*(?:いる|います)?\s*[。.!]?$",
             @"^(?:敵(?:が)?\s*)?(?<location>.+?)\s+(?<count>一|二|三|四|\d+)\s*(?:人)?\s*(?:いる|います)?[。.!]?$",
             @"^(?:(?:there\s+(?:is|are)\s+)?)?(?<count>one|two|three|four|\d+)\s+(?:enemy|enemies|opponents?)(?:\s+(?:at|in|on))?\s+(?<location>.+?)[.!]?$",
             @"^(?<location>.+?)\s+(?<count>one|two|three|four|\d+)\s+(?:enemy|enemies)[.!]?$",
@@ -655,10 +659,10 @@ public sealed partial class GlossaryService
 
     private static string NormalizeCount(string value) => value.ToLowerInvariant() switch
     {
-        "one" or "한" or "一" => "1",
-        "two" or "두" or "둘" or "二" => "2",
-        "three" or "세" or "셋" or "三" => "3",
-        "four" or "네" or "넷" or "四" => "4",
+        "one" or "한" or "一" or "一人" or "ひとり" => "1",
+        "two" or "두" or "둘" or "二" or "二人" or "ふたり" => "2",
+        "three" or "세" or "셋" or "三" or "三人" => "3",
+        "four" or "네" or "넷" or "四" or "四人" => "4",
         _ => value
     };
 
