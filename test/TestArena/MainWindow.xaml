@@ -1,0 +1,24 @@
+<Window x:Class="Valtrans.TestArena.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Valtrans Test Arena" Width="1280" Height="720" x:Name="ArenaWindow"
+        Background="#101418" WindowStartupLocation="Manual">
+  <Grid>
+    <Rectangle x:Name="BackgroundLayer" Fill="#1A2330"/>
+    <Rectangle x:Name="MotionLayer" Fill="#00000000" Opacity="0.25" IsHitTestVisible="False"/>
+    <TextBlock Text="VALTRANS TEST ARENA" Foreground="#334155" FontSize="42" FontWeight="Bold"
+               HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.35"/>
+    <Border x:Name="ChatPanel" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+            Margin="24,0,0,24" Width="420" MinHeight="180"
+            Background="#0F172A" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="6" Padding="10,8">
+      <ScrollViewer x:Name="ChatScrollViewer" VerticalScrollBarVisibility="Disabled"
+                    HorizontalScrollBarVisibility="Disabled">
+        <StackPanel x:Name="ChatLinesPanel"/>
+      </ScrollViewer>
+    </Border>
+    <Border x:Name="StatusBar" Background="#111827" BorderBrush="#1F2937" BorderThickness="0,1,0,0"
+            VerticalAlignment="Bottom" Padding="12,6">
+      <TextBlock x:Name="StatusText" Foreground="#94A3B8" FontSize="12"/>
+    </Border>
+  </Grid>
+</Window>

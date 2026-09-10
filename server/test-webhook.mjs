@@ -19,7 +19,7 @@ try {
   const root = await fetch(`http://127.0.0.1:${port}/`);
   const rootText = await root.text();
   if (!root.ok || !rootText.includes('Valtrans')) throw new Error('static site failed');
-  for (const required of ['PaddleOCR-VL', 'NVIDIA GPU', '로컬 전용', 'id="setup"', 'v0.2.2-beta']) {
+  for (const required of ['PaddleOCR-VL', 'NVIDIA GPU', '로컬 전용', 'id="setup"', 'v0.2.3-beta']) {
     if (!rootText.includes(required)) throw new Error(`site product information missing: ${required}`);
   }
   if (rootText.includes('외부 API는 선택 사항') || rootText.includes('v0.1.1-beta')) throw new Error('stale site information');

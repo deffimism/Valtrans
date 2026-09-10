@@ -74,6 +74,24 @@ public static class ChatTextSanitizer
 
     public static bool HasChatChannel(string text) => ChannelPrefix.IsMatch(text);
 
+    public static bool LooksLikeChatInputLine(string text)
+    {
+        text = text.Trim();
+        if (text.Length == 0) return false;
+        if (InputLine.IsMatch(text)) return true;
+        return Regex.IsMatch(text,
+            @"^(?:team|party|all|squad|팀|파티|전체|분대|チーム|パーティー?|全体)\s*[:：﹕꞉∶]\s*(?:[|｜¦_\-]|\s)*$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    public static bool IsChatInputOpen(OcrReadResult result)
+    {
+        if (result.PositionedLines is { Count: > 0 } lines)
+            return lines.Any(line => LooksLikeChatInputLine(line.Text));
+        return result.Text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Any(LooksLikeChatInputLine);
+    }
+
     public static string NormalizeOcrBody(string text)
     {
         // Standalone date/input labels, not a sender's message saying "today".

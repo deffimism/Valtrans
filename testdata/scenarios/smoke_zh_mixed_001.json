@@ -1,0 +1,41 @@
+{
+  "scenario": "smoke_zh_mixed_001",
+  "tags": ["zh", "mixed", "tactical", "ocr"],
+  "resolution": "1920x1080",
+  "dpi": 100,
+  "background": {
+    "mode": "static-bright",
+    "brightness": 1.15,
+    "motionSpeed": 0
+  },
+  "fuzz": {
+    "opacityMin": 0.88,
+    "opacityMax": 0.95,
+    "fontSizeJitter": 0.05
+  },
+  "chat": {
+    "fontSize": 16,
+    "opacity": 0.9,
+    "lineSpacing": 4
+  },
+  "events": [
+    { "atMs": 500, "speaker": "PlayerA", "text": "A小两个", "channel": "TEAM" },
+    { "atMs": 4500, "speaker": "PlayerB", "text": "jett残血", "channel": "TEAM" },
+    { "atMs": 8500, "speaker": "PlayerC", "text": "2 B Heaven", "channel": "TEAM" }
+  ],
+  "tags": ["zh", "mixed", "tactical"],
+  "expectations": [
+    {
+      "source": "A小两个",
+      "acceptedTranslations": ["2 A Short", "2 A", "A Short 2", "A 숏 2명"]
+    },
+    {
+      "source": "jett残血",
+      "acceptedTranslations": ["Jett low", "Jett low HP", "제트 체력 낮음", "Jett 체력 낮음"]
+    },
+    {
+      "source": "2 B Heaven",
+      "acceptedTranslations": ["B 헤븐 2명", "B 헤븐 2", "2 B Heaven"]
+    }
+  ]
+}

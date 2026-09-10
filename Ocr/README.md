@@ -1,6 +1,6 @@
 # Paddle OCR 실험 모드 / Experimental Paddle OCR
 
-v0.2.2-beta의 기본 OCR은 PaddleOCR-VL입니다. 시작 가이드에서 번역 엔진과 OCR을 함께 준비할 수 있습니다.
+v0.3.0-beta의 기본 OCR은 PaddleOCR-VL입니다. 중국어·혼합 언어에는 Fast OCR 또는 Hybrid(Fast+VL)도 선택할 수 있습니다. 시작 가이드에서 번역 엔진과 OCR을 함께 준비할 수 있습니다.
 기존 Windows OCR 설정도 업데이트 후 첫 실행에서 Paddle로 한 번 전환됩니다. 이후에는 Windows OCR을 직접 선택하고 저장할 수 있습니다. NVIDIA GPU 환경이 맞지 않으면 Windows OCR을 대안으로 선택하세요.
 
 ## 한국어
@@ -32,9 +32,27 @@ v0.2.2-beta의 기본 OCR은 PaddleOCR-VL입니다. 시작 가이드에서 번�
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Ocr\Setup.ps1 -RuntimeDirectory "$env:LOCALAPPDATA\Valtrans\OcrRuntime"
 ```
 
+## Fast OCR (PP-OCRv5) — 중국어·혼합 언어
+
+GPU 없이 동작하는 빠른 OCR 경로입니다. PaddleOCR-VL과 별도 프로세스·별도 설치 폴더를 사용합니다. Hybrid 모드에서는 Fast를 먼저 시도하고 신뢰도가 낮을 때만 VL로 폴백합니다.
+
+설치:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Ocr\Setup-FastOcr.ps1 -RuntimeDirectory "$env:LOCALAPPDATA\Valtrans\FastOcrRuntime"
+```
+
+최초 실행 시 PP-OCRv5 모델 다운로드·로드에 수 분이 걸릴 수 있습니다. E2E/테스트 전 워밍업:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Warmup-FastOcr.ps1
+```
+
+Test Mode / TestRunner에서 `--ocr-engine Fast` 또는 `Hybrid`로 지정합니다. `smoke_zh_mixed_001` E2E는 Fast OCR runtime이 없으면 SKIP됩니다.
+
 ## English
 
-PaddleOCR-VL is the default in v0.2.2-beta. Existing Windows OCR settings switch to Paddle once after this update; a later manual Windows selection is preserved after saving. Use Windows OCR as a lighter alternative if needed.
+PaddleOCR-VL is the default in v0.3.0-beta. Fast OCR and Hybrid are also available for Chinese and mixed-language chat. Existing Windows OCR settings switch to Paddle once after this update; a later manual Windows selection is preserved after saving. Use Windows OCR as a lighter alternative if needed.
 
 Click **시작 가이드 · 점검 → 권장 엔진 준비** for translation and OCR setup, or **OCR 설치 · 준비** in the guide for OCR only.
 After approval, missing uv, private Python, CUDA libraries and the official model are installed automatically, then the OCR model is prepared. Progress and errors stay in the guide. Existing runtimes are reused.

@@ -1,0 +1,29 @@
+{
+  "scenario": "smoke_basic_001",
+  "resolution": "1920x1080",
+  "dpi": 100,
+  "chat": {
+    "fontSize": 16,
+    "opacity": 0.9,
+    "lineSpacing": 4
+  },
+  "events": [
+    { "atMs": 500, "speaker": "PlayerA", "text": "Bラッシュ", "channel": "TEAM" },
+    { "atMs": 4500, "speaker": "PlayerB", "text": "watch left", "channel": "TEAM" },
+    { "atMs": 8500, "speaker": "PlayerC", "text": "왼쪽 조심해", "channel": "TEAM" }
+  ],
+  "expectations": [
+    {
+      "source": "Bラッシュ",
+      "acceptedTranslations": ["B 러시", "B rush"]
+    },
+    {
+      "source": "watch left",
+      "acceptedTranslations": ["왼쪽 조심", "왼쪽 경고"]
+    },
+    {
+      "source": "왼쪽 조심해",
+      "acceptedTranslations": ["watch left"]
+    }
+  ]
+}

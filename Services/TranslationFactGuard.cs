@@ -44,6 +44,13 @@ public static partial class TranslationFactGuard
                 string.Join(", ", reasons.Distinct()));
         }
 
+        if (glossary.TryTranslateSiteActionBriefing(source, targetLanguage, out var siteAction))
+        {
+            siteAction = BriefingTranslationGuard.Apply(source, siteAction, targetLanguage);
+            return new TranslationFactGuardResult(siteAction,
+                !siteAction.Equals(translated, StringComparison.OrdinalIgnoreCase), "사이트 행동 보존");
+        }
+
         if (glossary.TryTranslateExactDirectionalBriefing(source, targetLanguage, out var directional))
             return new TranslationFactGuardResult(directional, !directional.Equals(translated, StringComparison.OrdinalIgnoreCase),
                 "방향·인원 연결 또는 부정 대상 보존");

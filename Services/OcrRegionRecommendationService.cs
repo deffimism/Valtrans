@@ -31,17 +31,28 @@ public static class OcrRegionRecommendationService
         };
     }
 
-    // Full expanded chat panel measured from the user's 3837×2157 screenshot.
-    // Normalized client edges: left 1.25%, top 72.5%, right 24%, bottom 95.2%.
-    // Keep sender/channel prefixes, but exclude the input row and scrollbar.
-    // This is a 16:9 starting preset, not detection of every possible HUD layout.
-    // Round edges once in physical client pixels; never apply Windows DPI again.
+    // VALORANT chat measured with bottom-left origin (0%,0%) at the client bottom-left.
+    // Full widget: (1.37%, 1.74%) → (24.46%, 27.17%); input row ends at 4.69% from bottom.
+    // OCR uses the message stack only and excludes the input row.
+    public const double ValorantLeft = 0.0137;
+    public const double ValorantRight = 0.2446;
+    public const double ValorantInputTopFromBottom = 0.0469;
+    public const double ValorantChatTopFromBottom = 0.2717;
+
+    public static RelativeOcrRegion DefaultValorantLatestRegion() => new()
+    {
+        X = 0,
+        Y = 0.76,
+        Width = 1,
+        Height = 0.24
+    };
+
     private static CaptureRegion RecommendValorant(Rectangle bounds)
     {
-        var left = Math.Clamp((int)Math.Round(bounds.Width * 0.0125), 0, bounds.Width - 20);
-        var top = Math.Clamp((int)Math.Round(bounds.Height * 0.725), 0, bounds.Height - 20);
-        var right = Math.Clamp((int)Math.Round(bounds.Width * 0.24), left + 20, bounds.Width);
-        var bottom = Math.Clamp((int)Math.Round(bounds.Height * 0.952), top + 20, bounds.Height);
+        var left = Math.Clamp((int)Math.Round(bounds.Width * ValorantLeft), 0, bounds.Width - 20);
+        var top = Math.Clamp((int)Math.Round(bounds.Height * (1 - ValorantChatTopFromBottom)), 0, bounds.Height - 20);
+        var right = Math.Clamp((int)Math.Round(bounds.Width * ValorantRight), left + 20, bounds.Width);
+        var bottom = Math.Clamp((int)Math.Round(bounds.Height * (1 - ValorantInputTopFromBottom)), top + 20, bounds.Height);
         return new CaptureRegion
         {
             X = bounds.Left + left,

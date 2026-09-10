@@ -9,15 +9,23 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>Valtrans</AssemblyName>
     <RootNamespace>Valtrans</RootNamespace>
-    <Version>0.2.2-beta</Version>
-    <FileVersion>0.2.2.0</FileVersion>
+    <StartupObject>Valtrans.Program</StartupObject>
+    <Version>0.3.0-beta</Version>
+    <FileVersion>0.3.0.0</FileVersion>
     <Product>Valtrans Game Chat Translator</Product>
     <ApplicationIcon>Assets\Valtrans.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="test/**" />
+    <None Remove="test/**" />
+    <EmbeddedResource Remove="test/**" />
+    <Page Remove="test/**" />
+  </ItemGroup>
+  <ItemGroup>
     <Content Include="README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Ocr\paddle_host.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="Ocr\README.md;Ocr\Setup.ps1;Ocr\download_model.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Ocr\fast_ocr_host.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Ocr\README.md;Ocr\Setup.ps1;Ocr\Setup-FastOcr.ps1;Ocr\download_model.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Resource Include="Assets\Valtrans.ico" />
     <Resource Include="Assets\Valtrans-mark.png" />
     <Resource Include="Assets\Valtrans-donate.png" />

@@ -1,0 +1,61 @@
+{
+  "version": "v0.2.3",
+  "ocrEngine": "Windows",
+  "scenario": "smoke_basic_001",
+  "seed": 20260910,
+  "capturedUtc": "2026-09-10T04:35:10.0721156Z",
+  "e2EStatus": "PASS",
+  "accuracy": {
+    "totalCases": 3,
+    "passedCases": 3,
+    "casePassRate": 1,
+    "ocrSourceMatchRate": 0.6667,
+    "translationAcceptRate": 1
+  },
+  "latency": {
+    "ocrP50Ms": 70.4,
+    "ocrP95Ms": 142.7,
+    "translationP50Ms": 5.6,
+    "translationP95Ms": 28.6,
+    "e2EP50Ms": 75.8,
+    "e2EP95Ms": 171.3
+  },
+  "cases": [
+    {
+      "source": "B\u30E9\u30C3\u30B7\u30E5",
+      "status": "PASS",
+      "ocrRaw": "B \u30E9\u30C3\u30B7\u30E5",
+      "translationOutput": "B \uB7EC\uC2DC",
+      "traceId": "msg-0000002",
+      "totalLatencyMs": 171.3,
+      "acceptedTranslations": [
+        "B \uB7EC\uC2DC",
+        "B rush"
+      ]
+    },
+    {
+      "source": "watch left",
+      "status": "PASS",
+      "ocrRaw": "watch \u5384 \u5347",
+      "translationOutput": "\uC67C\uCABD \uC870\uC2EC",
+      "traceId": "msg-0000004",
+      "totalLatencyMs": 72.9,
+      "acceptedTranslations": [
+        "\uC67C\uCABD \uC870\uC2EC",
+        "\uC67C\uCABD \uACBD\uACE0"
+      ]
+    },
+    {
+      "source": "\uC67C\uCABD \uC870\uC2EC\uD574",
+      "status": "PASS",
+      "ocrRaw": "\uC67C\uCABD \uC870\uC2EC\uD574",
+      "translationOutput": "watch left",
+      "traceId": "msg-0000005",
+      "totalLatencyMs": 75.8,
+      "acceptedTranslations": [
+        "watch left"
+      ]
+    }
+  ],
+  "failureSamples": []
+}

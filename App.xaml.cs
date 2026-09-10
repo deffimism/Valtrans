@@ -13,6 +13,8 @@ public partial class App : System.Windows.Application
         _ = SetCurrentProcessExplicitAppUserModelID("Valtrans.GameChatTranslator");
         if (!string.IsNullOrWhiteSpace(Environment.ProcessPath))
             SHChangeNotify(ShellChangeUpdateItem, ShellNotifyPathW, Environment.ProcessPath, IntPtr.Zero);
+        var window = new MainWindow();
+        window.Show();
     }
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]

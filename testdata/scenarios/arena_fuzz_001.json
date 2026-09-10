@@ -1,0 +1,50 @@
+{
+  "scenario": "arena_fuzz_001",
+  "resolution": "1920x1080",
+  "dpi": 125,
+  "tags": ["fuzz", "arena", "phase8"],
+  "chat": {
+    "fontSize": 16,
+    "opacity": 0.92,
+    "lineSpacing": 5,
+    "fadeInMs": 150,
+    "maxVisibleLines": 10,
+    "scrollEnabled": true
+  },
+  "background": {
+    "mode": "animated-gradient",
+    "brightness": 1.0,
+    "motionSpeed": 0.75
+  },
+  "fuzz": {
+    "opacityMin": 0.82,
+    "opacityMax": 1.0,
+    "fontSizeJitter": 0.08,
+    "brightnessJitter": 0.05,
+    "blurRadiusMax": 0
+  },
+  "animation": {
+    "chatFadeIn": true,
+    "chatScroll": true,
+    "backgroundMotion": true
+  },
+  "events": [
+    { "atMs": 500, "speaker": "PlayerA", "text": "Bラッシュ", "channel": "TEAM" },
+    { "atMs": 4500, "speaker": "PlayerB", "text": "watch left", "channel": "TEAM" },
+    { "atMs": 8500, "speaker": "PlayerC", "text": "왼쪽 조심해", "channel": "TEAM" }
+  ],
+  "expectations": [
+    {
+      "source": "Bラッシュ",
+      "acceptedTranslations": ["B 러시", "B rush"]
+    },
+    {
+      "source": "watch left",
+      "acceptedTranslations": ["왼쪽 조심", "왼쪽 경고"]
+    },
+    {
+      "source": "왼쪽 조심해",
+      "acceptedTranslations": ["watch left"]
+    }
+  ]
+}

@@ -118,7 +118,16 @@ public sealed class SettingsService
             // Switch existing installations once; later user choices remain available.
             if (settings.SettingsSchemaVersion < 24)
                 settings.OcrEngine = "Paddle";
-            settings.SettingsSchemaVersion = 24;
+            settings.ChatInputFullChatSeconds = settings.ChatInputFullChatSeconds is >= 1 and <= 15
+                ? settings.ChatInputFullChatSeconds
+                : 4;
+            if (settings.SettingsSchemaVersion < 26)
+            {
+                settings.EnableMessageTrace = true;
+                settings.SaveTraceErrorSamples = true;
+                settings.MessageTraceMaxRecent = 50;
+            }
+            settings.SettingsSchemaVersion = 26;
             settings.AutoSwitchGameProfile = true;
             settings.DualRegionOcr = true;
             settings.Model = settings.LocalAiModel;
@@ -133,7 +142,7 @@ public sealed class SettingsService
     public void Save(AppSettings settings)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-        settings.SettingsSchemaVersion = 24;
+        settings.SettingsSchemaVersion = 26;
         File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
     }
 }

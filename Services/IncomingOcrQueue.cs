@@ -33,10 +33,10 @@ public sealed class IncomingOcrQueue : IDisposable
             {
                 if (line.Equals(_active, StringComparison.OrdinalIgnoreCase) ||
                     _pending.Any(item => item.Text.Equals(line, StringComparison.OrdinalIgnoreCase))) continue;
-                if (_pending.Count >= 8)
+                if (_pending.Count >= 2)
                 {
                     _pending.Dequeue();
-                    _notice("번역 대기 상한 · 오래된 1줄 제외");
+                    _notice("최신 메시지 우선 · 이전 대기 줄 폐기");
                 }
                 _pending.Enqueue((line, DateTime.UtcNow));
             }
@@ -62,13 +62,13 @@ public sealed class IncomingOcrQueue : IDisposable
                     }
                     try
                     {
-                        if (DateTime.UtcNow - item.Enqueued > TimeSpan.FromSeconds(20))
+                        if (DateTime.UtcNow - item.Enqueued > TimeSpan.FromSeconds(45))
                         {
                             _notice("번역 대기 만료 · 오래된 1줄 제외");
                             continue;
                         }
                         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
-                        deadline.CancelAfter(TimeSpan.FromSeconds(15));
+                        deadline.CancelAfter(TimeSpan.FromSeconds(30));
                         // The callback must honor cancellation; never launch another GPU
                         // request while an abandoned callback is still running.
                         await _process(item.Text, deadline.Token);

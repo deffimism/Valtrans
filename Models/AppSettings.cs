@@ -16,7 +16,11 @@ public sealed class AppSettings
     public string OcrLanguage { get; set; } = "AUTO";
     public string OcrEngine { get; set; } = "Paddle";
     public string PaddleOcrRuntime { get; set; } = "";
-    public int SettingsSchemaVersion { get; set; } = 24;
+    public string FastOcrRuntime { get; set; } = "";
+    public int SettingsSchemaVersion { get; set; } = 26;
+    public bool EnableMessageTrace { get; set; } = true;
+    public bool SaveTraceErrorSamples { get; set; } = true;
+    public int MessageTraceMaxRecent { get; set; } = 50;
     public bool ShowStartupGuide { get; set; } = true;
     public bool ShowAdvancedSettings { get; set; }
     public bool AutoSwitchGameProfile { get; set; } = true;
@@ -30,6 +34,7 @@ public sealed class AppSettings
     public bool DualRegionOcr { get; set; } = true;
     public Dictionary<string, RelativeOcrRegion> LatestOcrRegions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public int OcrConsensusDelayMs { get; set; } = 180;
+    public int ChatInputFullChatSeconds { get; set; } = 4;
     public string OcrChatFilterMode { get; set; } = "Briefing";
     public bool OverlayClickThrough { get; set; }
     public double OverlayBackgroundOpacity { get; set; } = 0.38;

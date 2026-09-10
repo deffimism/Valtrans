@@ -29,6 +29,7 @@ public static class GameTranslationPrompt
             Omit redundant introductions and polite endings only when meaning stays unchanged.
             A/B/C plus an area form ONE location: B Heaven, A Main, C Long. Keep the site letter attached to the area.
             Heaven/Hell/Main are game positions, not ordinary meanings; never turn B Heaven into 'B has ... in Heaven'.
+            Bラッシュ / B rush / B push are site actions, not locations with enemy counts. Never translate them as B Heaven or add people counts.
             For a simple location/count report, omit redundant 'there are', 'people', and 'enemies'.
             Do not remove an explicit teammate/ally label or an action such as moving, watching, or waiting.
             Output style examples in {language}: {StyleExamples(target)}

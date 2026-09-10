@@ -8,7 +8,7 @@ public sealed partial class GlossaryService
 {
     private static readonly Dictionary<string, string> CommonLocations = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["헤븐"] = "Heaven", ["ヘブン"] = "Heaven", ["헬"] = "Hell", ["ヘル"] = "Hell",
+        ["헤븐"] = "Heaven", ["ヘブン"] = "Heaven", ["天堂"] = "Heaven", ["地狱"] = "Hell", ["헬"] = "Hell", ["ヘル"] = "Hell",
         ["메인"] = "Main", ["メイン"] = "Main", ["링크"] = "Link", ["リンク"] = "Link",
         ["숏"] = "Short", ["ショート"] = "Short", ["롱"] = "Long", ["ロング"] = "Long",
         ["백사이트"] = "Back Site", ["バックサイト"] = "Back Site", ["사이트 안"] = "Site",
@@ -468,12 +468,15 @@ public sealed partial class GlossaryService
         text = ChatTextSanitizer.ContentForLanguageDetection(text).Trim();
         translated = "";
         if (text.Length == 0) return false;
+        if (TryTranslateChineseTacticalBriefing(text, target, settings, out translated)) return true;
+        if (TryTranslateSiteActionBriefing(text, target, out translated)) return true;
         if (TryTranslateExactDirectionalBriefing(text, target, out translated)) return true;
         if (TryTranslateWatchDirection(text, target, out translated)) return true;
         if (TryTranslateMovementProhibition(text, target, settings, out translated)) return true;
         if (TryTranslateEnemyPresenceBriefing(text, target, settings, out translated)) return true;
         if (TryTranslateFlashWait(text, target, out translated)) return true;
         if (TryTranslateSlangCallout(text, target, settings, out translated)) return true;
+        if (IsSiteActionCallout(text)) return false;
 
         var noEnemyPatterns = new[]
         {
@@ -508,7 +511,7 @@ public sealed partial class GlossaryService
 
         var warningPatterns = new[]
         {
-            @"^(?<location>.+?)\s*(?:조심(?:해|하세요)?|경계(?:해|하세요)?|봐\s*줘)[.!]?$",
+            @"^(?<location>.+?)\s*(?:조심(?:\s*해(?:요|하세요)?|하세요)?|경계(?:\s*해(?:요|하세요)?|하세요)?|봐\s*줘)[.!]?$",
             @"^(?<location>.+?)\s*(?:注意|警戒|気をつけて)[。.!]?$",
             @"^(?:watch|check|careful(?:\s+(?:of|on))?)\s+(?<location>.+?)[.!]?$",
             @"^(?<location>.+?)\s+(?:careful|watch\s*out)[.!]?$"
@@ -581,7 +584,7 @@ public sealed partial class GlossaryService
             var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             if (!match.Success) continue;
             var location = NormalizeCalloutLocation(match.Groups["location"].Value, settings);
-            if (!IsLikelyLocation(location, settings)) continue;
+            if (!IsLikelyLocation(location, settings) || IsActionNotLocation(location)) continue;
             var count = NormalizeCount(match.Groups["count"].Value);
             var displayLocation = LocalizeCalloutLocation(location, target);
             translated = target switch
@@ -639,6 +642,14 @@ public sealed partial class GlossaryService
     private static string? CanonicalCharacterName(string value, AppSettings settings) =>
         ProperNames.Values.Concat(settings.CustomGlossary.Values)
             .FirstOrDefault(name => name.Equals(value, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsSiteActionCallout(string text) =>
+        Regex.IsMatch(text.Trim(),
+            @"^(?<site>[ABC])\s*(?<action>rush|push|ラッシュ|プッシュ|러시|푸시)[.!]?$|^(?<site2>[ABC])(?<action2>ラッシュ|러시|プッシュ)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static bool IsActionNotLocation(string location) =>
+        Regex.IsMatch(location.Trim(), @"^(?:rush|push|ラッシュ|プッシュ|러시|푸시)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static bool IsLikelyLocation(string value, AppSettings settings)
     {

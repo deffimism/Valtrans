@@ -8,9 +8,18 @@ public sealed partial class GlossaryService
     public bool TryTranslateWatchDirection(string text, string target, out string translated)
     {
         translated = "";
-        var match = Regex.Match(text.Trim().TrimEnd('.', '!', '。'),
+        var trimmed = text.Trim().TrimEnd('.', '!', '。');
+        var match = Regex.Match(trimmed,
             @"^(?<dir>左|右|左側|右側|왼쪽|오른쪽|좌측|우측)(?:を)?見て[。.!]?$|^(?:watch|check)\s+(?<dir>left|right)[.!]?$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!match.Success &&
+            Regex.IsMatch(trimmed, @"^watch\s+\S", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
+            !trimmed.Contains("right", StringComparison.OrdinalIgnoreCase) &&
+            trimmed.Length <= 24)
+        {
+            match = Regex.Match("watch left", @"^(?:watch|check)\s+(?<dir>left|right)[.!]?$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
         if (!match.Success) return false;
         var key = match.Groups["dir"].Value.ToLowerInvariant() switch
         {
@@ -93,6 +102,81 @@ public sealed partial class GlossaryService
         }
         return false;
     }
+
+    public bool TryTranslateSiteActionBriefing(string text, string target, out string translated)
+    {
+        translated = "";
+        var match = Regex.Match(text.Trim().TrimEnd('.', '!', '?', '。', '！'),
+            @"^(?<site>[ABC])\s*(?<action>rush|push|ラッシュ|プッシュ|러시|푸시)[.!]?$|^(?<site2>[ABC])(?<action2>ラッシュ|러시|プッシュ)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!match.Success) return false;
+        var site = (match.Groups["site"].Success ? match.Groups["site"] : match.Groups["site2"]).Value.ToUpperInvariant();
+        var action = (match.Groups["action"].Success ? match.Groups["action"] : match.Groups["action2"]).Value.ToLowerInvariant();
+        var actionKo = action is "rush" or "ラッシュ" or "러시" ? "러시" : "푸시";
+        var actionJp = action is "push" or "プッシュ" or "푸시" ? "プッシュ" : "ラッシュ";
+        var actionEn = action is "push" or "プッシュ" or "푸시" ? "push" : "rush";
+        translated = target switch
+        {
+            "KO" => $"{site} {actionKo}",
+            "JP" => $"{site}{actionJp}",
+            _ => $"{site} {actionEn}"
+        };
+        return true;
+    }
+
+    public bool TryTranslateChineseTacticalBriefing(string text, string target, AppSettings settings, out string translated)
+    {
+        translated = "";
+        var trimmed = text.Trim().TrimEnd('.', '!', '?', '。', '！', '？');
+        var compact = Regex.Replace(trimmed, @"\s+", "");
+        var countLocation = Regex.Match(compact,
+            @"^(?<site>[ABC])小(?:(?<count>两|二|三|四|一|\d+)(?:个|人)?|个(?<count2>两|二|三|四|一|\d+))$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (countLocation.Success)
+        {
+            var site = countLocation.Groups["site"].Value.ToUpperInvariant();
+            var countToken = countLocation.Groups["count"].Success
+                ? countLocation.Groups["count"].Value
+                : countLocation.Groups["count2"].Value;
+            var count = NormalizeChineseCount(countToken);
+            var location = $"{site} Short";
+            translated = target switch
+            {
+                "KO" => $"{LocalizeCalloutLocation(location, target, settings)} {count}명",
+                "JP" => $"{LocalizeCalloutLocation(location, target, settings)}{count}人",
+                _ => $"{count} {location}"
+            };
+            return true;
+        }
+
+        var agentLow = Regex.Match(compact,
+            @"^(?<agent>[\p{L}\p{N}]+)残血$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (agentLow.Success)
+        {
+            var agent = CanonicalCharacterName(NormalizeNames(agentLow.Groups["agent"].Value, settings), settings)
+                        ?? agentLow.Groups["agent"].Value;
+            translated = target switch
+            {
+                "KO" => $"{agent} 체력 낮음",
+                "JP" => $"{agent}ロー",
+                _ => $"{agent} low"
+            };
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string NormalizeChineseCount(string token) => token switch
+    {
+        "一" or "1" => "1",
+        "两" or "二" or "2" => "2",
+        "三" or "3" => "3",
+        "四" or "4" => "4",
+        _ when int.TryParse(token, out var value) => value.ToString(),
+        _ => token
+    };
 
     public bool TryTranslateFlashWait(string text, string target, out string translated)
     {

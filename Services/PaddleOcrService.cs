@@ -166,7 +166,7 @@ public sealed class PaddleOcrService : IDisposable
             var process = _process!;
             var id = Guid.NewGuid().ToString("N");
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-            deadline.CancelAfter(TimeSpan.FromSeconds(18));
+            deadline.CancelAfter(TimeSpan.FromSeconds(28));
             var request = JsonSerializer.Serialize(new { id, png = Convert.ToBase64String(png) });
             try
             {
@@ -179,10 +179,12 @@ public sealed class PaddleOcrService : IDisposable
                 if (!root.TryGetProperty("id", out var returnedId) || returnedId.GetString() != id)
                     throw new IOException("OCR 응답 순서를 확인할 수 없습니다.");
                 if (root.TryGetProperty("error", out _)) throw new InvalidOperationException(Error(root));
-                if (!root.GetProperty("finished").GetBoolean())
-                    throw new TimeoutException("Paddle OCR이 전체 채팅을 제한 시간 안에 읽지 못했습니다. 영역을 줄여 주세요. 불완전한 결과는 번역하지 않았습니다.");
+                var text = root.GetProperty("text").GetString() ?? "";
+                var finished = root.GetProperty("finished").GetBoolean();
+                if (!finished && string.IsNullOrWhiteSpace(text))
+                    throw new TimeoutException("Paddle OCR이 제한 시간 안에 읽지 못했습니다. 최신 1줄 모드·영역 표시를 확인하거나 Windows OCR을 시도하세요.");
                 var ms = root.GetProperty("milliseconds").GetDouble();
-                return new OcrReadResult(root.GetProperty("text").GetString() ?? "", "MIXED",
+                return new OcrReadResult(text, "MIXED",
                     RecognitionDurationMs: ms, TotalDurationMs: ms);
             }
             catch (OperationCanceledException) when (!token.IsCancellationRequested)

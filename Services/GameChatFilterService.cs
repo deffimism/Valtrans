@@ -14,7 +14,8 @@ public sealed class GameChatFilterService
     private static readonly Regex TacticalTerms = new(
         @"(?ix)(?:\b(?:mid|main|site|heaven|hell|short|long|left|right|front|back|spawn|ct|rotate|rotating|push|rush|hold|peek|flank|plant|defuse|save|buy|eco|flash|smoke|molly|ult|heal|revive|rez|cracked|knocked|one\s*shot|low\s*hp|dmg|damage|help|wait|enemy|enemies|opponent|opponents)\b|" +
         @"미드|메인|사이트|헤븐|숏|롱|왼쪽|오른쪽|앞|뒤|스폰|로테|합류|푸시|러시|막아|지켜|피킹?|플랭크|설치|해체|세이브|구매|플래시|연막|스모크|궁|힐|살려|부활|딸피|체력|데미지|도와|기다려|적|상대|" +
-        @"ミッド|メイン|サイト|ヘブン|ショート|ロング|左|右|前|後ろ|スポーン|ローテ|合流|プッシュ|ラッシュ|守って|ピーク|フランク|設置|解除|セーブ|購入|フラッシュ|スモーク|ウルト|回復|蘇生|ロー|ダメージ|助けて|待って|敵|相手)",
+        @"ミッド|メイン|サイト|ヘブン|ショート|ロング|左|右|前|後ろ|スポーン|ローテ|合流|プッシュ|ラッシュ|守って|ピーク|フランク|設置|解除|セーブ|購入|フラッシュ|スモーク|ウルト|回復|蘇生|ロー|ダメージ|助けて|待って|敵|相手|" +
+        @"中路|短道|长道|天堂|地狱|残血|小|两个|后面|左边|右边|敌人|防守|进攻)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static readonly Regex SiteLetter = new(

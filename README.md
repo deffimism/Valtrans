@@ -6,8 +6,8 @@ Windows 게임 채팅 번역 · Local game chat translation for Windows
 
 [한국어 사용법](#korean) · [English guide](#english)
 
-> **작성 기준 버전 / Documentation baseline: v0.2.2-beta**<br>
-> **검토일 / Reviewed: 2026-09-08**<br>
+> **작성 기준 버전 / Documentation baseline: v0.3.0-beta**<br>
+> **검토일 / Reviewed: 2026-09-10**<br>
 > 현재 화면과 사용 흐름을 기준으로 작성했습니다. 사용법이 변하지 않으면 앱 버전이 올라가도 README는 업데이트되지 않을 수 있습니다.<br>
 > This guide describes the interface and workflow at the version above. It may remain unchanged across releases when the usage instructions still apply.
 
@@ -49,7 +49,7 @@ OCR은 **화면을 글자로 읽는 단계**, 번역 엔진은 **그 글자를 �
 | 보내는 채팅 목표 언어 | English |
 | 받는 채팅 원문 언어 | EN / JP / KO 모두 선택 |
 | 받는 채팅 출력 언어 | 한국어 |
-| OCR 엔진 | PaddleOCR-VL · NVIDIA GPU 및 별도 설치 필요 |
+| OCR 엔진 | Hybrid OCR(Fast+VL) 또는 PaddleOCR-VL · 중국어/혼합은 Fast OCR도 가능 |
 | 채팅 필터 | 브리핑 중심. 동작 시험 중에는 **잡담도 번역** |
 | 오버레이 표시 시간 | 15초 |
 
@@ -97,7 +97,7 @@ OCR 선택·상태·**OCR 설치 / OCR 준비** 버튼은 **채팅 대시보드 
 
 영역은 게임 창의 위치·크기를 기준으로 계산하고 창 이동·해상도 변경을 반영합니다. 게임을 찾지 못한 상태의 영역 표시는 모니터 기준 미리보기이며, OCR 시작에는 지원 게임 감지가 필요합니다.
 
-VALORANT의 16:9 추천 범위는 게임 화면 기준 **가로 1.25~24%, 세로 72.5~95.2%**입니다. 펼친 채팅 영역을 포함하고 입력줄은 제외하도록 잡았습니다. 모든 해상도·HUD 상태에서 검증된 고정 정답은 아닙니다. 다른 화면 비율이나 긴 줄이 잘리면 해상도와 화면을 함께 제보해 주세요.
+VALORANT 추천 범위는 게임 화면 **좌측 하단 (0%,0%)** 기준으로 측정한 비율을 사용합니다. 메시지 영역은 **가로 1.37~24.5%, 세로 4.7~27.2%**(입력줄 4.7% 이하는 제외)입니다. Enter로 채팅 입력창을 **짧게** 열면 최신 1줄만 빠르게 번역하고, 입력창이 **설정한 시간(기본 4초) 이상** 열려 있으면 전체 채팅을 번역합니다. 시간은 **세부 설정 · 진단 → 전체 채팅 번역 대기**에서 바꿀 수 있습니다.
 
 #### 채팅이 생략되는 경우
 
@@ -114,7 +114,7 @@ VALORANT의 16:9 추천 범위는 게임 화면 기준 **가로 1.25~24%, 세로
 
 설치·준비에는 메뉴를 펼칠 필요가 없습니다. 부가 옵션은 **채팅 대시보드 → 세부 설정 · 진단**을 펼칩니다.
 
-- **채팅 필터 · OCR 세부 조정:** 잡담 포함 여부, 안정화, 작은 글자 자동 확대·대비 보정, 두 프레임 합의.
+- **채팅 필터 · OCR 세부 조정:** 잡담 포함 여부, **전체 채팅 번역 대기(기본 4초)**, 안정화, 작은 글자 자동 확대·대비 보정, 두 프레임 합의.
 - OCR 엔진 선택·설치·준비는 받는 채팅 카드에 바로 표시됩니다.
 - **OCR 처리 상세:** 인식·생략·대기·번역 상태를 확인합니다.
 
@@ -168,6 +168,19 @@ VALORANT의 16:9 추천 범위는 게임 화면 기준 **가로 1.25~24%, 세로
 현재 설치 경로는 NVIDIA GPU용입니다. 다운로드 수 GB, 디스크 여유 약 10GB를 권장하며, 실측 환경에서는 추가 GPU 메모리 약 2GB와 수 초의 인식 시간이 필요했습니다. PC·게임 부하에 따라 달라집니다. Windows 언어팩은 필요하지 않지만 원문 언어 선택은 여전히 번역 필터에 적용됩니다.
 
 이 모드에는 Windows 확대 보정·이중 영역·두 프레임 합의가 적용되지 않습니다. **취소 · 메모리 해제**, OCR 중지 또는 앱 종료로 앱이 시작한 OCR 프로세스를 종료할 수 있습니다. 더 정확하거나 더 빠르다고 항상 보장하지 않습니다.
+
+#### Fast OCR · Hybrid OCR (v0.3.0)
+
+중국어·영문 혼합 채팅이 많을 때 **Fast OCR(PP-OCRv5)** 또는 **Hybrid OCR(Fast + Paddle VL 폴백)**을 선택할 수 있습니다.
+
+| 엔진 | 용도 |
+| --- | --- |
+| Fast OCR | GPU 없이 동작. 중국어·혼합 인식에 적합. `Ocr/Setup-FastOcr.ps1`로 설치 |
+| Hybrid OCR | Fast를 먼저 시도하고 신뢰도가 낮을 때만 Paddle VL로 폴백 |
+| PaddleOCR-VL | 기본값. NVIDIA GPU 필요 |
+| Windows OCR | 가벼운 대안. 언어팩 필요 |
+
+대시보드 **받는 채팅 · OCR**에서 엔진을 고른 뒤 **OCR 설치 · 준비**를 누르면 선택한 엔진에 맞는 설치·준비가 진행됩니다.
 
 ### 7. 번역 시험과 사전
 
@@ -291,7 +304,7 @@ Click **입력** beside the hotkey to assign a single key or combination; Esc ca
 
 The crop follows game-client position and resolution. Without a detected game, the outline is a monitor preview; starting OCR requires detection of a supported game.
 
-The VALORANT 16:9 preset covers **X 1.25–24%, Y 72.5–95.2%** of the game client, including expanded chat and excluding the input row. This is a starting preset, not a guarantee across every resolution or HUD state. Report clipping with a screenshot and resolution.
+The VALORANT preset uses bottom-left client coordinates: message OCR covers **X 1.37–24.5%, Y 4.7–27.2%** (input row below 4.7% is excluded). Brief Enter opens **latest-line-only** OCR; holding the input open for **4 seconds** (configurable under **Advanced OCR → Full-chat wait**) switches to full-chat translation.
 
 #### Why messages can be skipped
 
@@ -354,6 +367,19 @@ PaddleOCR-VL is the **default OCR engine** for mixed-language chat. Prepare its 
 The current setup targets NVIDIA GPUs. Allow several GB of downloads and about 10GB free disk space. The measured development setup used roughly 2GB additional GPU memory and seconds per recognition pass; actual performance varies. Windows language packs are not required for this engine, but source-language checkboxes still filter translation.
 
 Windows enhancement, dual-region checks and two-frame agreement do not apply to Paddle. Release its owned worker with **취소 · 메모리 해제**, OCR stop or app exit. Higher accuracy or faster processing is not guaranteed.
+
+#### Fast OCR · Hybrid OCR (v0.3.0)
+
+For Chinese and mixed-language chat, choose **Fast OCR (PP-OCRv5)** or **Hybrid OCR (Fast with Paddle VL fallback)** on the incoming-chat dashboard.
+
+| Engine | Notes |
+| --- | --- |
+| Fast OCR | CPU-friendly; install with `Ocr/Setup-FastOcr.ps1` |
+| Hybrid OCR | Fast first, Paddle VL only when confidence is low |
+| PaddleOCR-VL | Default; NVIDIA GPU required |
+| Windows OCR | Lighter alternative; language packs required |
+
+Use **OCR 설치 · 준비** after selecting the engine.
 
 ### 7. Test translation and add terminology
 
@@ -418,7 +444,12 @@ PowerShell 7 기본 회귀 검사 / Basic regression checks:
 pwsh -NoProfile -STA -File scripts/Test-LocalFirst.ps1 -AssemblyPath publish/Valtrans.dll
 pwsh -NoProfile -STA -File scripts/Test-QualityPipeline.ps1 -AssemblyPath publish/Valtrans.dll
 pwsh -NoProfile -STA -File scripts/Test-OcrPipeline.ps1 -AssemblyPath publish/Valtrans.dll
+
+# Agent / CI regression gate (Test Arena E2E, baseline compare)
+pwsh -NoProfile -File scripts/test.ps1 -Profile Full
 ```
+
+Test Arena E2E는 실제 Capture→OCR 경로를 사용합니다. Arena 창 위치는 `%LOCALAPPDATA%\Valtrans\TestArena\window-layout.json`에 저장되며, `scripts/Save-ArenaLayout.ps1`로 현재 위치를 저장할 수 있습니다. E2E 실행 시 포커스를 빼려면 `-NoFocusArena`를 사용하세요.
 
 합성 OCR·모의 응답 검사는 실게임 정확도 측정과 다릅니다.<br>
 Synthetic OCR and mocked-response tests are not real-game accuracy measurements.

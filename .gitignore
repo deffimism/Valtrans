@@ -7,7 +7,8 @@ releases/
 .vs/
 *.user
 *.suo
-artifacts/
+artifacts/*
+!artifacts/baseline-*.json
 __pycache__/
 server/.env
 server/data/events.json

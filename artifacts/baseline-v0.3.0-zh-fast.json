@@ -1,0 +1,67 @@
+{
+  "version": "v0.2.3",
+  "ocrEngine": "Fast",
+  "scenario": "smoke_zh_mixed_001",
+  "seed": 20260910,
+  "capturedUtc": "2026-09-10T04:35:56.2900274Z",
+  "e2EStatus": "PASS",
+  "accuracy": {
+    "totalCases": 3,
+    "passedCases": 3,
+    "casePassRate": 1,
+    "ocrSourceMatchRate": 1,
+    "translationAcceptRate": 1
+  },
+  "latency": {
+    "ocrP50Ms": 800.2,
+    "ocrP95Ms": 1090,
+    "translationP50Ms": 24.2,
+    "translationP95Ms": 75.6,
+    "e2EP50Ms": 824.4,
+    "e2EP95Ms": 1104.8
+  },
+  "cases": [
+    {
+      "source": "A\u5C0F\u4E24\u4E2A",
+      "status": "PASS",
+      "ocrRaw": "A\u5C0F\u4E24\u4E2A",
+      "translationOutput": "A \uC20F 2\uBA85",
+      "traceId": "msg-0000001",
+      "totalLatencyMs": 507,
+      "acceptedTranslations": [
+        "2 A Short",
+        "2 A",
+        "A Short 2",
+        "A \uC20F 2\uBA85"
+      ]
+    },
+    {
+      "source": "jett\u6B8B\u8840",
+      "status": "PASS",
+      "ocrRaw": "jett\u6B8B\u8840",
+      "translationOutput": "Jett \uCCB4\uB825 \uB0AE\uC74C",
+      "traceId": "msg-0000002",
+      "totalLatencyMs": 824.4,
+      "acceptedTranslations": [
+        "Jett low",
+        "Jett low HP",
+        "\uC81C\uD2B8 \uCCB4\uB825 \uB0AE\uC74C",
+        "Jett \uCCB4\uB825 \uB0AE\uC74C"
+      ]
+    },
+    {
+      "source": "2 B Heaven",
+      "status": "PASS",
+      "ocrRaw": "2 B Heaven",
+      "translationOutput": "B \uD5E4\uBE10 2",
+      "traceId": "msg-0000003",
+      "totalLatencyMs": 1104.8,
+      "acceptedTranslations": [
+        "B \uD5E4\uBE10 2\uBA85",
+        "B \uD5E4\uBE10 2",
+        "2 B Heaven"
+      ]
+    }
+  ],
+  "failureSamples": []
+}

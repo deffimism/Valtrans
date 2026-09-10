@@ -14,7 +14,7 @@ foreach ($schema in @(0,23,24)) {
         $expectedOcr = if ($schema -ge 24 -and $choice -eq 'Windows') { 'Windows' } else { 'Paddle' }
         $migrated = $settingsStore.Load()
         Check ($migrated.OcrEngine -eq $expectedOcr) 'OCR one-time migration failed'
-        Check ($migrated.SettingsSchemaVersion -eq 24) 'OCR migration marker missing'
+        Check ($migrated.SettingsSchemaVersion -eq 26) 'OCR migration marker missing'
         $settingsStore.Save($migrated)
         Check ($settingsStore.Load().OcrEngine -eq $expectedOcr) 'OCR migration not stable after save'
         $migrated.OcrEngine = 'Windows'
@@ -130,3 +130,6 @@ foreach ($name in @('OcrEngineCombo','InstallPaddleOcrButton','PreparePaddleOcrB
 }
 Check ($null -ne $xml.SelectSingleNode("//w:Button[@x:Name='GuideOcrPrepareButton']",$ns)) 'Guide OCR setup action missing'
 Write-Output 'PASS: visible OCR preparation; guide setup action; advanced-only expanders'
+
+& "$PSScriptRoot/Run-E2ESmoke.ps1"
+Write-Output 'PASS: E2E smoke (Test Arena capture path)'
