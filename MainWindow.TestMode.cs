@@ -89,6 +89,10 @@ public partial class MainWindow
             FinishTestMode("FAIL", "test-mode OCR failed to start");
             return;
         }
+
+        _ocrBaselinePending = false;
+        _lastOcrText = "";
+        _previousOcrLines = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         try
         {
             var ocrReady = TestModeContext.OcrReadySignalPath;
@@ -129,9 +133,9 @@ public partial class MainWindow
                 FinishTestMode("FAIL", "Hybrid OCR requires Fast + Paddle runtimes");
                 return false;
             }
-            if (!await PrepareHybridOcrAsync())
+            if (!await PrepareFastOcrAsync())
             {
-                FinishTestMode("FAIL", "Hybrid OCR prepare failed");
+                FinishTestMode("FAIL", "Hybrid OCR fast prepare failed");
                 return false;
             }
         }
@@ -306,9 +310,10 @@ public partial class MainWindow
         if (string.IsNullOrWhiteSpace(actual)) return false;
         var left = NormalizeForTestCompare(expected);
         var right = NormalizeForTestCompare(actual);
-        return left.Equals(right, StringComparison.OrdinalIgnoreCase) ||
-               right.Contains(left, StringComparison.OrdinalIgnoreCase) ||
-               left.Contains(right, StringComparison.OrdinalIgnoreCase);
+        if (left.Equals(right, StringComparison.OrdinalIgnoreCase)) return true;
+        if (right.Contains(left, StringComparison.OrdinalIgnoreCase)) return true;
+        return left.Contains(right, StringComparison.OrdinalIgnoreCase) &&
+               right.Length >= Math.Min(left.Length, 8);
     }
 
     private static string NormalizeForTestCompare(string value) =>

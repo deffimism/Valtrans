@@ -115,7 +115,7 @@ try {
         Check $rejected 'Retired provider not rejected'
     }
     Check ($handler.Calls -eq 8) 'Retired provider made request'
-    foreach ($example in @(@('제트','Jett'),@('ジェット','Jett'),@('패파','Pathfinder'),@('어센트','Ascent'),@('ヘイヴン','Haven'))) {
+    foreach ($example in @(@('제트','Jett'),@('ジェット','Jett'),@('어센트','Ascent'),@('ヘイヴン','Haven'),@('バインド','Bind'))) {
         Check ($glossary.NormalizeNames($example[0],$settings) -eq $example[1]) 'Proper-name dictionary regression'
     }
     Check ($glossary.NormalizeLocations('램프',$settings) -eq 'Ramp') 'Map-specific override survived'

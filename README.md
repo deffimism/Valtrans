@@ -7,7 +7,7 @@ Windows 게임 채팅 번역 · Local game chat translation for Windows
 [한국어 사용법](#korean) · [English guide](#english)
 
 > **작성 기준 버전 / Documentation baseline: v0.3.0-beta**<br>
-> **검토일 / Reviewed: 2026-09-10**<br>
+> **검토일 / Reviewed: 2026-09-11**<br>
 > 현재 화면과 사용 흐름을 기준으로 작성했습니다. 사용법이 변하지 않으면 앱 버전이 올라가도 README는 업데이트되지 않을 수 있습니다.<br>
 > This guide describes the interface and workflow at the version above. It may remain unchanged across releases when the usage instructions still apply.
 
@@ -17,7 +17,7 @@ Windows 게임 채팅 번역 · Local game chat translation for Windows
 
 ### 무엇을 하는 프로그램인가요?
 
-Valtrans는 VALORANT와 Apex Legends의 채팅을 한국어·영어·일본어 사이에서 번역하는 Windows 앱입니다.
+Valtrans는 VALORANT 채팅을 한국어·영어·일본어 사이에서 번역하는 Windows 앱입니다.
 
 - **보내는 채팅:** 게임 채팅창에 입력한 내용을 단축키로 번역해 교체합니다. 전송은 직접 합니다.
 - **받는 채팅:** 게임의 채팅 영역을 OCR로 읽고 새 메시지의 번역을 오버레이에 표시합니다.
@@ -154,7 +154,7 @@ VALORANT 추천 범위는 게임 화면 **좌측 하단 (0%,0%)** 기준으로 �
 
 **서버·언어권 참고**는 은어 해석에 참고할 문맥입니다. 실제 서버 접속 설정이나 원문 언어 필터가 아닙니다.
 
-맵 선택 없이 캐릭터·맵 이름 등 고유명사를 공통 사전으로 처리합니다. 예: `제트 / ジェット → Jett`, `패파 → Pathfinder`. 사전이 모든 은어와 문맥을 보장하지는 않습니다.
+맵 선택 없이 캐릭터·맵 이름 등 고유명사를 공통 사전으로 처리합니다. 예: `제트 / ジェット → Jett`, `어센트 / アセント → Ascent`. 사전이 모든 은어와 문맥을 보장하지는 않습니다.
 
 #### 기본 PaddleOCR-VL
 
@@ -240,7 +240,7 @@ VALORANT 추천 범위는 게임 화면 **좌측 하단 (0%,0%)** 기준으로 �
 
 ### What Valtrans does
 
-Valtrans translates VALORANT and Apex Legends chat between Korean, English and Japanese on Windows.
+Valtrans translates VALORANT chat between Korean, English and Japanese on Windows.
 
 - **Outgoing:** replaces text in the game's chat input using a hotkey. You send it yourself.
 - **Incoming:** reads game chat with OCR and displays new translations in an overlay.
@@ -449,7 +449,19 @@ pwsh -NoProfile -STA -File scripts/Test-OcrPipeline.ps1 -AssemblyPath publish/Va
 pwsh -NoProfile -File scripts/test.ps1 -Profile Full
 ```
 
-Test Arena E2E는 실제 Capture→OCR 경로를 사용합니다. Arena 창 위치는 `%LOCALAPPDATA%\Valtrans\TestArena\window-layout.json`에 저장되며, `scripts/Save-ArenaLayout.ps1`로 현재 위치를 저장할 수 있습니다. E2E 실행 시 포커스를 빼려면 `-NoFocusArena`를 사용하세요.
+Test Arena E2E는 실제 Capture→OCR 경로를 사용합니다. Arena 창 위치는 `%LOCALAPPDATA%\Valtrans\TestArena\window-layout.json`에 저장되며, `scripts/Save-ArenaLayout.ps1`로 현재 위치를 저장할 수 있습니다. `test.ps1`의 E2E 프로필은 기본으로 `-NoFocusArena`를 사용합니다(캡처 시점에 Arena가 보이면 됩니다).
+
+| 스크립트 | 시나리오 | OCR |
+| --- | --- | --- |
+| `Run-E2ESmoke.ps1` | `smoke_basic_001` | Windows |
+| `Run-E2EZhSmoke.ps1` | `smoke_zh_mixed_001` | Fast |
+| `Run-E2EHybridSmoke.ps1` | `smoke_zh_mixed_001` | Hybrid |
 
 합성 OCR·모의 응답 검사는 실게임 정확도 측정과 다릅니다.<br>
 Synthetic OCR and mocked-response tests are not real-game accuracy measurements.
+
+| Script | Scenario | OCR |
+| --- | --- | --- |
+| `Run-E2ESmoke.ps1` | `smoke_basic_001` | Windows |
+| `Run-E2EZhSmoke.ps1` | `smoke_zh_mixed_001` | Fast |
+| `Run-E2EHybridSmoke.ps1` | `smoke_zh_mixed_001` | Hybrid |

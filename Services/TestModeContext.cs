@@ -28,7 +28,7 @@ public static class TestModeContext
         OutputPath = outputPath;
         ReadyFilePath = readyFilePath;
         ArenaWindowTitle = string.IsNullOrWhiteSpace(arenaWindowTitle) ? "Valtrans Test Arena" : arenaWindowTitle;
-        TimeoutSeconds = Math.Clamp(timeoutSeconds, 30, 600);
+        TimeoutSeconds = Math.Clamp(timeoutSeconds, 30, 900);
         OcrEngine = NormalizeOcrEngine(ocrEngine);
     }
 

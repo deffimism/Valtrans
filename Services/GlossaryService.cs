@@ -269,25 +269,7 @@ public sealed partial class GlossaryService
         ["ゲッコー"] = "Gekko", ["ハーバー"] = "Harbor", ["アイソ"] = "Iso", ["ジェット"] = "Jett",
         ["キルジョイ"] = "Killjoy", ["ネオン"] = "Neon", ["オーメン"] = "Omen", ["フェニックス"] = "Phoenix",
         ["レイズ"] = "Raze", ["レイナ"] = "Reyna", ["セージ"] = "Sage", ["スカイ"] = "Skye", ["ソーヴァ"] = "Sova",
-        ["ヴァイパー"] = "Viper", ["ヨル"] = "Yoru",
-
-        // Apex Legends
-        ["얼터"] = "Alter", ["애쉬"] = "Ash", ["액슬"] = "Axle", ["발리스틱"] = "Ballistic", ["방갈로르"] = "Bangalore",
-        ["블러드하운드"] = "Bloodhound", ["블하"] = "Bloodhound", ["카탈리스트"] = "Catalyst", ["코스틱"] = "Caustic",
-        ["콘딧"] = "Conduit", ["크립토"] = "Crypto", ["퓨즈"] = "Fuse", ["지브롤터"] = "Gibraltar", ["지브"] = "Gibraltar",
-        ["호라이즌"] = "Horizon", ["라이프라인"] = "Lifeline", ["라라"] = "Lifeline", ["로바"] = "Loba",
-        ["매드 매기"] = "Mad Maggie", ["매기"] = "Mad Maggie", ["미라지"] = "Mirage", ["뉴캐슬"] = "Newcastle",
-        ["옥테인"] = "Octane", ["패스파인더"] = "Pathfinder", ["패파"] = "Pathfinder", ["램파트"] = "Rampart",
-        ["레버넌트"] = "Revenant", ["레버"] = "Revenant", ["시어"] = "Seer", ["스패로우"] = "Sparrow",
-        ["발키리"] = "Valkyrie", ["밴티지"] = "Vantage", ["왓슨"] = "Wattson", ["레이스"] = "Wraith",
-        ["オルター"] = "Alter", ["アッシュ"] = "Ash", ["バリスティック"] = "Ballistic", ["バンガロール"] = "Bangalore",
-        ["ブラッドハウンド"] = "Bloodhound", ["カタリスト"] = "Catalyst", ["コースティック"] = "Caustic",
-        ["コンジット"] = "Conduit", ["クリプト"] = "Crypto", ["ヒューズ"] = "Fuse", ["ジブラルタル"] = "Gibraltar",
-        ["ホライゾン"] = "Horizon", ["ライフライン"] = "Lifeline", ["ローバ"] = "Loba", ["マッドマギー"] = "Mad Maggie",
-        ["ミラージュ"] = "Mirage", ["ニューキャッスル"] = "Newcastle", ["オクタン"] = "Octane",
-        ["パスファインダー"] = "Pathfinder", ["ランパート"] = "Rampart", ["レヴナント"] = "Revenant",
-        ["シア"] = "Seer", ["ヴァルキリー"] = "Valkyrie", ["ヴァンテージ"] = "Vantage",
-        ["ワットソン"] = "Wattson", ["レイス"] = "Wraith"
+        ["ヴァイパー"] = "Viper", ["ヨル"] = "Yoru"
     };
 
     public string NormalizeNames(string text, AppSettings settings)

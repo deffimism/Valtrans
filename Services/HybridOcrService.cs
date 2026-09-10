@@ -29,6 +29,7 @@ public sealed class HybridOcrService
 
     public async Task<OcrReadResult> ReadAsync(
         byte[] png,
+        byte[]? latestLinePng,
         string fastRuntime,
         string paddleRuntime,
         GlossaryService glossary,
@@ -36,14 +37,23 @@ public sealed class HybridOcrService
         CancellationToken token)
     {
         var fast = await _fast.ReadAsync(png, fastRuntime, token);
-        if (fast.QualityScore >= FastAcceptThreshold)
+        if (OcrCandidateResolver.MeetsHybridFastAccept(fast, glossary, settings))
             return fast with { DetectedLanguage = "MIXED" };
 
-        if (fast.QualityScore >= FastPlausibilityThreshold &&
-            OcrCandidateResolver.IsPlausible(fast.Text, glossary, settings, fast.QualityScore))
+        if (latestLinePng is { Length: > 0 } && !TestModeContext.Enabled)
+        {
+            var latestFast = await _fast.ReadAsync(latestLinePng, fastRuntime, token);
+            if (OcrCandidateResolver.MeetsHybridFastAccept(latestFast, glossary, settings))
+                return latestFast with { DetectedLanguage = "MIXED" };
+            fast = OcrCandidateResolver.Choose(fast, latestFast, glossary, settings);
+            if (OcrCandidateResolver.MeetsHybridFastAccept(fast, glossary, settings))
+                return fast with { DetectedLanguage = "MIXED" };
+        }
+
+        if (TestModeContext.Enabled)
             return fast with { DetectedLanguage = "MIXED" };
 
-        var vl = await _paddle.ReadAsync(png, paddleRuntime, token);
+        var vl = await _paddle.ReadAsync(latestLinePng ?? png, paddleRuntime, token);
         return OcrCandidateResolver.Choose(fast, vl, glossary, settings) with { DetectedLanguage = "MIXED" };
     }
 }

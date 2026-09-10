@@ -15,14 +15,14 @@ try {
     foreach ($provider in @('Hybrid', 'Lite', 'Ollama', 'DeepLX', 'OpenAI')) {
         $settings = [Valtrans.Models.AppSettings]::new()
         $settings.TranslationProvider = $provider
-        $settings.Game = 'Apex Legends'
+        $settings.Game = 'VALORANT'
         $settings.DeepLxUrl = 'http://127.0.0.1:1/translate'
         $settings.DeepLxAutoFallback = $false
         $cases = @(
             @{ Text = "omw`nJett lit"; Target = 'KO'; Expected = "가는 중`nJett · 피해 입음" },
             @{ Text = "힐좀`n피킹 ㄴㄴ"; Target = 'EN'; Expected = "need heal`ndon't peek" },
             @{ Text = "np`nJett low"; Target = 'JP'; Expected = "大丈夫`nJett · ロー" },
-            @{ Text = "NP!!!`nレイス激ロー`nneed bats"; Target = 'KO'; Expected = "괜찮아`nWraith · 딸피`n배터리 필요" }
+            @{ Text = "NP!!!`n제트 딸피`n포바"; Target = 'KO'; Expected = "괜찮아`nJett · 딸피`nforce buy" }
         )
         foreach ($case in $cases) {
             $timeout = [System.Threading.CancellationTokenSource]::new(5000)

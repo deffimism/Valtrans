@@ -120,7 +120,6 @@
                   <ComboBox x:Name="GameCombo" SelectionChanged="Game_OnSelectionChanged" ToolTip="게임 화면 비율로 채팅 영역을 계산하고 해당 게임의 용어 사전을 사용합니다.">
                     <ComboBoxItem Tag="Auto"><TextBlock Style="{StaticResource ComboText}" Text="게임 자동"/></ComboBoxItem>
                     <ComboBoxItem Tag="VALORANT"><TextBlock Style="{StaticResource ComboText}" Text="VALORANT"/></ComboBoxItem>
-                    <ComboBoxItem Tag="Apex Legends"><TextBlock Style="{StaticResource ComboText}" Text="Apex Legends"/></ComboBoxItem>
                   </ComboBox>
                 </Grid>
               </Grid>

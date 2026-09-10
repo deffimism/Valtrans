@@ -8,8 +8,7 @@ public static class GameWindowDetectionService
 {
     private static readonly (string Game, string Process)[] SupportedGames =
     {
-        ("VALORANT", "VALORANT-Win64-Shipping"),
-        ("Apex Legends", "r5apex")
+        ("VALORANT", "VALORANT-Win64-Shipping")
     };
 
     public static bool TryGetForegroundSupportedGame(string selectedGame, out string game)

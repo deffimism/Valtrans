@@ -52,7 +52,7 @@ TestRunner 예시:
 
 ```text
 Valtrans.TestRunner.exe --scenario testdata/scenarios/smoke_basic_001.json --seed 20260910 --ocr-engine Windows
-Valtrans.TestRunner.exe --scenario testdata/scenarios/smoke_basic_001.json --ocr-engine Hybrid --no-focus-arena
+Valtrans.TestRunner.exe --scenario testdata/scenarios/smoke_zh_mixed_001.json --seed 20260910 --ocr-engine Hybrid --no-focus-arena
 Valtrans.TestRunner.exe --compare-baseline artifacts/baseline-v0.2.3-windows.json --current-baseline <path>
 ```
 
@@ -117,7 +117,7 @@ gh auth login
 ```
 
 - Windows OCR 일본어 `二/ニ` 혼동은 OCR 엔진 한계로 문맥 검증 없이 일괄 치환하지 않음
-- Hybrid E2E는 Paddle VL runtime 설치 후 `Run-E2EHybridSmoke.ps1`
+- Hybrid E2E는 Fast + Paddle VL runtime 설치 후 `Run-E2EHybridSmoke.ps1` (기본 시나리오: `smoke_zh_mixed_001`; `smoke_basic_001`은 Windows E2E용)
 
 ## 작업 원칙
 

@@ -127,6 +127,8 @@ public sealed class SettingsService
                 settings.SaveTraceErrorSamples = true;
                 settings.MessageTraceMaxRecent = 50;
             }
+            if (settings.Game.Equals("Apex Legends", StringComparison.OrdinalIgnoreCase))
+                settings.Game = "VALORANT";
             settings.SettingsSchemaVersion = 26;
             settings.AutoSwitchGameProfile = true;
             settings.DualRegionOcr = true;

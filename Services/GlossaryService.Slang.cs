@@ -50,14 +50,7 @@ public sealed partial class GlossaryService
         new("save weapons", "무기 세이브", "武器セーブ", true, "VALORANT", "save weapons", "총 세이브", "무기 세이브"),
         new("play post-plant", "설치 후 시간 끌자", "設置後は時間を稼ごう", true, "VALORANT", "play post plant", "play post-plant", "설치 후 시간 끌자"),
         new("need a drop", "총 사줘", "武器買って", true, "VALORANT", "drop pls", "drop please", "need drop", "총좀", "총 사줘", "武器買って"),
-        new("stick the defuse", "해체 끝까지 해", "解除しきって", true, "VALORANT", "stick it", "stick the defuse", "해체 끝까지 해"),
-        new("cracked", "실드 깸", "アーマー割った", true, "Apex Legends", "cracked", "armor cracked", "shield broken", "실드 깸", "갑옷 깸", "アーマー割った", "割った"),
-        new("third party", "다른 팀 난입", "漁夫", true, "Apex Legends", "3rd party", "third party", "써드파티", "어부", "漁夫", "ぎょふ", "gyofu"),
-        new("armor swap", "실드 스왑", "アーマースワップ", true, "Apex Legends", "armor swap", "shield swap", "갑바 스왑", "실드 스왑", "アーマースワップ"),
-        new("need a battery", "배터리 필요", "バッテリー欲しい", true, "Apex Legends", "need bat", "need batt", "need bats", "배터리좀", "배터리 좀", "バッテリー欲しい"),
-        new("using a battery", "배터리 쓰는 중", "バッテリー巻いてる", true, "Apex Legends", "popping a bat", "popping bat", "batting", "배터리 쓰는 중", "バッテリー巻いてる"),
-        new("revive me", "살려줘", "蘇生お願い", true, null, "rez me", "res me", "살려줘", "蘇生お願い"),
-        new("knocked one", "한 명 다운", "一人ノック", true, "Apex Legends", "knocked one", "one knocked", "1 knocked", "1 knock", "한 명 다운", "一人ノック", "一枚ダウン")
+        new("stick the defuse", "해체 끝까지 해", "解除しきって", true, "VALORANT", "stick it", "stick the defuse", "해체 끝까지 해")
     ];
 
     private static string NormalizeSlangKey(string value) => Regex.Replace(
@@ -80,7 +73,7 @@ public sealed partial class GlossaryService
     }
 
     private static readonly IReadOnlyDictionary<string, Regex> TacticalSlangPatterns =
-        new[] { "Auto", "VALORANT", "Apex Legends" }.ToDictionary(game => game, game => new Regex(
+        new[] { "Auto", "VALORANT" }.ToDictionary(game => game, game => new Regex(
             string.Join("|", SlangPhrases.Where(phrase => phrase.Tactical && phrase.Supports(new AppSettings { Game = game }))
                 .SelectMany(phrase => phrase.Aliases).Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderByDescending(alias => alias.Length).Select(TermPattern)),
@@ -111,8 +104,6 @@ public sealed partial class GlossaryService
         {
             "lit" => ("damaged", "피해 입음", "ダメージあり"),
             "low" or "low hp" or "체력 낮음" or "ロー" => ("low HP", "체력 낮음", "ロー"),
-            "cracked" or "실드 깸" or "アーマー割った" when settings.Game == "Apex Legends" => ("cracked", "실드 깸", "アーマー割った"),
-            "knocked" or "다운" or "ノック" when settings.Game == "Apex Legends" => ("knocked", "다운", "ノック"),
             "one shot" or "one-shot" or "oneshot" or "딸피" or "개딸피" or "激ロー" or "ミリ" => ("one shot", "딸피", "激ロー"),
             _ => ("", "", "")
         };
@@ -128,7 +119,7 @@ public sealed partial class GlossaryService
         $@"(?<![\p{{L}}\p{{N}}_]){Regex.Escape(term).Replace(@"\ ", @"\s+")}(?![\p{{L}}\p{{N}}_])";
 
     private static readonly IReadOnlyDictionary<string, (Regex Pattern, Dictionary<string, string> Values)> ExpansionRules =
-        new[] { "Auto", "VALORANT", "Apex Legends" }.ToDictionary(game => game,
+        new[] { "Auto", "VALORANT" }.ToDictionary(game => game,
             game => BuildExpansionRules(new AppSettings { Game = game }), StringComparer.OrdinalIgnoreCase);
 
     private static (Regex Pattern, Dictionary<string, string> Values) BuildExpansionRules(AppSettings settings)

@@ -25,6 +25,4 @@ foreach ($size in @(@(3440,1440),@(1280,1024),@(640,480),@(20,20))) {
     $region = [Valtrans.Services.OcrRegionRecommendationService]::Recommend('valorant',$bounds)
     if (-not $region.IsValid -or -not $bounds.Contains($region.ToRectangle())) { throw 'Fallback bounds invalid' }
 }
-$apex = [Valtrans.Services.OcrRegionRecommendationService]::Recommend('Apex Legends',[Drawing.Rectangle]::new(0,0,1920,1080))
-if ($apex.X -ne 19 -or $apex.Y -ne 713 -or $apex.Width -ne 594 -or $apex.Height -ne 367) { throw 'Apex regression' }
-Write-Output 'PASS: 5 presets including supplied screenshot, 3 monitor/window origins, normalized full panel, fallback bounds, input margin, Apex unchanged. No settings or game processes touched.'
+Write-Output 'PASS: 5 presets including supplied screenshot, 3 monitor/window origins, normalized full panel, fallback bounds, input margin. No settings or game processes touched.'

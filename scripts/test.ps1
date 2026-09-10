@@ -11,18 +11,18 @@ switch ($Profile) {
     }
     'Smoke' {
         & "$PSScriptRoot/Test-MessageTrace.ps1"
-        & "$PSScriptRoot/Run-E2ESmoke.ps1"
+        & "$PSScriptRoot/Run-E2ESmoke.ps1" -NoFocusArena
     }
     'Quick' {
         & "$PSScriptRoot/Test-LocalFirst.ps1"
-        & "$PSScriptRoot/Run-E2ESmoke.ps1"
+        & "$PSScriptRoot/Run-E2ESmoke.ps1" -NoFocusArena
     }
     'Baseline' {
         & "$PSScriptRoot/Run-AllBaselines.ps1"
     }
     'ZhSmoke' {
         & "$PSScriptRoot/Test-MessageTrace.ps1"
-        & "$PSScriptRoot/Run-E2EZhSmoke.ps1"
+        & "$PSScriptRoot/Run-E2EZhSmoke.ps1" -NoFocusArena
     }
     'Fuzz' {
         & "$PSScriptRoot/Run-ArenaFuzz.ps1"
@@ -30,12 +30,12 @@ switch ($Profile) {
     'Full' {
         dotnet test "$root/test/Valtrans.Tests/Valtrans.Tests.csproj" -c Release
         & "$PSScriptRoot/Test-MessageTrace.ps1"
-        & "$PSScriptRoot/Run-E2ESmoke.ps1"
+        & "$PSScriptRoot/Run-E2ESmoke.ps1" -NoFocusArena
         & "$PSScriptRoot/Run-ArenaFuzz.ps1"
         $fastMarker = Join-Path $env:LOCALAPPDATA 'Valtrans/FastOcrRuntime/fast_model.json'
         if (Test-Path -LiteralPath $fastMarker) {
-            & "$PSScriptRoot/Run-E2EZhSmoke.ps1"
-            & "$PSScriptRoot/Run-E2EHybridSmoke.ps1"
+            & "$PSScriptRoot/Run-E2EZhSmoke.ps1" -NoFocusArena
+            & "$PSScriptRoot/Run-E2EHybridSmoke.ps1" -NoFocusArena
         } else {
             Write-Output 'SKIP: ZhSmoke (Fast OCR runtime missing)'
         }

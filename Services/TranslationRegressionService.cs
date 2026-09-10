@@ -93,13 +93,8 @@ public sealed class TranslationRegressionService
             new SlangCase("시간 콜", "play time", "JP", "Auto", "時間を稼いで"),
             new SlangCase("대상 피해 은어", "Jett lit", "KO", "VALORANT", "Jett · 피해 입음"),
             new SlangCase("낮은 체력 정확도", "Jett low", "KO", "VALORANT", "Jett · 체력 낮음"),
-            new SlangCase("일본어 붙여쓰기", "レイス激ロー", "KO", "Apex Legends", "Wraith · 딸피"),
             new SlangCase("한국어 대상 은어", "제트 딸피", "EN", "VALORANT", "Jett · one shot"),
             new SlangCase("은어 추정 보존", "maybe Jett lit", "KO", "VALORANT", "추정 · Jett · 피해 입음"),
-            new SlangCase("에이펙스 어부", "3rd party", "KO", "Apex Legends", "다른 팀 난입"),
-            new SlangCase("일본어 어부", "漁夫", "EN", "Apex Legends", "third party"),
-            new SlangCase("배터리 축약", "need bats", "KO", "Apex Legends", "배터리 필요"),
-            new SlangCase("부활 약어", "rez me", "JP", "Apex Legends", "蘇生お願い"),
             new SlangCase("구매 은어", "포바", "EN", "VALORANT", "force buy"),
             new SlangCase("해체 완료 콜", "stick it", "KO", "VALORANT", "해체 끝까지 해")
         };
@@ -134,10 +129,10 @@ public sealed class TranslationRegressionService
                 passed ? "정상" : "일부 사실만 남기는 규칙 적용됨"));
         }
         var filter = new GameChatFilterService(_glossary);
-        foreach (var text in new[] { "omw", "힐좀", "double swing", "need bats", "漁夫" })
+        foreach (var text in new[] { "omw", "힐좀", "double swing", "포바", "stick it" })
         {
             var passed = filter.Filter(text, GameChatFilterService.StrictMode,
-                new AppSettings { Game = "Apex Legends" }).Keep;
+                new AppSettings { Game = "VALORANT" }).Keep;
             results.Add(new TranslationRegressionResult($"OCR 은어 보존 {text}", passed,
                 passed ? "정상" : "전술 은어가 필터링됨"));
         }

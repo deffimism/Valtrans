@@ -2,11 +2,13 @@ param(
     [string]$Scenario = "$PSScriptRoot/../testdata/scenarios/arena_fuzz_001.json",
     [int[]]$Seeds = @(20260910, 20260911, 20260912),
     [switch]$RunE2E,
+    [switch]$NoFocusArena,
     [int]$Timeout = 240
 )
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path "$PSScriptRoot/.."
 . "$PSScriptRoot/Resolve-ValtransBuild.ps1"
+Stop-ValtransE2EProcesses
 $scenarioPath = Resolve-Path -LiteralPath $Scenario
 
 dotnet build "$root/test/TestArena/Valtrans.TestArena.csproj" -c Release | Out-Null
@@ -27,7 +29,9 @@ if ($RunE2E) {
     $runner = Get-ValtransTestRunner -Root $root
     foreach ($seed in $Seeds) {
         Write-Output "E2E fuzz seed=$seed"
-        & $runner --scenario $scenarioPath --seed $seed --timeout $Timeout
+        $runnerArgs = @('--scenario', $scenarioPath, '--seed', $seed, '--timeout', $Timeout)
+        if ($NoFocusArena) { $runnerArgs += '--no-focus-arena' }
+        & $runner @runnerArgs
         if ($LASTEXITCODE -ne 0) { throw "Arena fuzz E2E failed for seed $seed" }
     }
     Write-Output "Arena fuzz E2E: PASS ($($Seeds.Count) seeds)"

@@ -1001,7 +1001,7 @@ public partial class MainWindow : System.Windows.Window
             var gameWindow = GameWindowDetectionService.Detect(_settings.Game);
             if (gameWindow is not { ClientBounds.Width: >= 640, ClientBounds.Height: >= 480 })
             {
-                SetStatus("게임 실행 필요", "VALORANT 또는 Apex Legends를 실행하면 채팅 영역을 자동으로 계산합니다.", true);
+                SetStatus("게임 실행 필요", "VALORANT를 실행하면 채팅 영역을 자동으로 계산합니다.", true);
                 return;
             }
             SwitchToGameProfile(gameWindow.Game, forceReload: true);
@@ -1993,7 +1993,18 @@ public partial class MainWindow : System.Windows.Window
         var paddleRuntime = string.IsNullOrWhiteSpace(_settings.PaddleOcrRuntime)
             ? PaddleOcrService.FindRuntime()
             : _settings.PaddleOcrRuntime;
-        var result = await _hybridOcr.ReadAsync(captured.Png, fastRuntime, paddleRuntime, _glossary, _settings, token);
+        byte[]? latestLinePng = null;
+        if (!TestModeContext.Enabled)
+        {
+            var latestRegion = GetLatestOcrRegion();
+            if (region != latestRegion)
+            {
+                var latestCaptured = await _ocr.CaptureFramePngAsync(latestRegion);
+                latestLinePng = latestCaptured.Png;
+            }
+        }
+        var result = await _hybridOcr.ReadAsync(captured.Png, latestLinePng, fastRuntime, paddleRuntime, _glossary,
+            _settings, token);
         return result with
         {
             FrameHash = captured.FrameHash,
@@ -2309,12 +2320,14 @@ public partial class MainWindow : System.Windows.Window
                 var hybrid = _settings.OcrEngine == "Hybrid";
                 if (paddle || fast || hybrid)
                 {
-                    var useFullRegion = ShouldRunFullChatOcr();
+                    var useFullRegion = ShouldRunFullChatOcr() || UseFullCaptureRegionForTest();
                     var captureRegion = useFullRegion ? region : latestRegion;
                     var captured = await _ocr.CaptureFramePngAsync(captureRegion);
                     candidateHash = captured.FrameHash;
                     var engineLabel = hybrid ? "Hybrid OCR" : fast ? "Fast OCR" : "Paddle OCR";
-                    if (_lastOcrFrameHash == candidateHash && DateTime.UtcNow - lastRecognitionUtc < TimeSpan.FromSeconds(10))
+                    if (!TestModeContext.Enabled &&
+                        _lastOcrFrameHash == candidateHash &&
+                        DateTime.UtcNow - lastRecognitionUtc < TimeSpan.FromSeconds(10))
                     {
                         RecordOcrStage($"화면 변화 없음 · {engineLabel} 생략");
                         await Task.Delay(_settings.OcrIntervalMs, cancellationToken);
@@ -2382,7 +2395,7 @@ public partial class MainWindow : System.Windows.Window
                 }
                 else
                 {
-                    var useFullRegion = ShouldRunFullChatOcr();
+                    var useFullRegion = ShouldRunFullChatOcr() || UseFullCaptureRegionForTest();
                     var readRegion = useFullRegion ? region : latestRegion;
                     candidateHash = await _ocr.CaptureFrameHashAsync(readRegion);
                     if (_lastOcrFrameHash.HasValue && candidateHash == _lastOcrFrameHash.Value &&
@@ -3883,7 +3896,10 @@ public partial class MainWindow : System.Windows.Window
     }
 
     private bool ShouldRunFullChatOcr() =>
-        TestModeContext.Enabled || IsFullChatInputMode() || _ocrBaselinePending;
+        (TestModeContext.Enabled && _ocrBaselinePending) ||
+        (!TestModeContext.Enabled && (IsFullChatInputMode() || _ocrBaselinePending));
+
+    private bool UseFullCaptureRegionForTest() => TestModeContext.Enabled;
 
     private bool ShouldForceFullDualOcr(DateTime lastFullCheckUtc) =>
         _ocrBaselinePending ||
