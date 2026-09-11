@@ -10,8 +10,8 @@
     <AssemblyName>Valtrans</AssemblyName>
     <RootNamespace>Valtrans</RootNamespace>
     <StartupObject>Valtrans.Program</StartupObject>
-    <Version>0.3.0-beta</Version>
-    <FileVersion>0.3.0.0</FileVersion>
+    <Version>0.4.0-beta</Version>
+    <FileVersion>0.4.0.0</FileVersion>
     <Product>Valtrans Game Chat Translator</Product>
     <ApplicationIcon>Assets\Valtrans.ico</ApplicationIcon>
   </PropertyGroup>

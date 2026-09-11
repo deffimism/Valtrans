@@ -28,7 +28,7 @@ public sealed class SettingsService
             var json = File.ReadAllText(SettingsPath);
             var settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions)
                            ?? new AppSettings();
-            settings.OcrEngine = settings.OcrEngine == "Windows" ? "Windows" : "Paddle";
+            settings.OcrEngine = NormalizeOcrEngine(settings.OcrEngine);
             settings.PaddleOcrRuntime ??= "";
             using (var schema = JsonDocument.Parse(json))
                 if (!schema.RootElement.TryGetProperty("SettingsSchemaVersion", out _))
@@ -140,6 +140,16 @@ public sealed class SettingsService
             return new AppSettings();
         }
     }
+
+    // Fast and Hybrid arrived after this normalization was written. Collapsing every
+    // non-Windows value to Paddle silently discarded the user's engine choice on restart.
+    private static string NormalizeOcrEngine(string? value) => value?.Trim() switch
+    {
+        "Windows" => "Windows",
+        "Fast" => "Fast",
+        "Hybrid" => "Hybrid",
+        _ => "Paddle"
+    };
 
     public void Save(AppSettings settings)
     {

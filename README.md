@@ -6,8 +6,8 @@ Windows 게임 채팅 번역 · Local game chat translation for Windows
 
 [한국어 사용법](#korean) · [English guide](#english)
 
-> **작성 기준 버전 / Documentation baseline: v0.3.0-beta**<br>
-> **검토일 / Reviewed: 2026-09-11**<br>
+> **작성 기준 버전 / Documentation baseline: v0.4.0-beta**<br>
+> **검토일 / Reviewed: 2026-09-11** (v0.4.0-beta)<br>
 > 현재 화면과 사용 흐름을 기준으로 작성했습니다. 사용법이 변하지 않으면 앱 버전이 올라가도 README는 업데이트되지 않을 수 있습니다.<br>
 > This guide describes the interface and workflow at the version above. It may remain unchanged across releases when the usage instructions still apply.
 
@@ -25,6 +25,14 @@ Valtrans는 VALORANT 채팅을 한국어·영어·일본어 사이에서 번역�
 - **FPS 표현:** 약어·은어·고유명사 사전과 번역 규칙을 사용합니다. 인원·방향·부정·불확실성을 보존하려 하지만 오역은 가능합니다.
 
 OCR은 **화면을 글자로 읽는 단계**, 번역 엔진은 **그 글자를 다른 언어로 바꾸는 단계**입니다. 번역 모델을 바꿔도 OCR이 잘못 읽은 원문 자체는 고쳐지지 않습니다.
+
+#### v0.4.0-beta 주요 변경
+
+- **일본어 OCR:** Windows OCR은 일본어 인식 한계가 있습니다. JP 채팅은 **Fast** 또는 **Hybrid** OCR을 권장합니다. 시작 가이드에 언어팩·엔진 안내가 표시됩니다.
+- **OCR 테스트:** 대시보드 **OCR 테스트**가 선택한 엔진(Windows / Fast / Hybrid / Paddle) 경로를 모두 지원합니다.
+- **오버레이:** 번역이 생략되면 오버레이에 **생략 이유**를 잠시 표시합니다.
+- **해상도:** 16:9가 아닌 화면비에서도 채팅 영역을 높이 기준으로 보정합니다(16:9는 동일).
+- **Lite:** 일본어↔한국어는 영어 피벗(최대 2회 모델 호출). `scripts/Benchmark-LitePivot.ps1`로 지연을 측정할 수 있습니다.
 
 ### 1. 설치와 첫 실행
 
@@ -91,9 +99,9 @@ OCR 선택·상태·**OCR 설치 / OCR 준비** 버튼은 **채팅 대시보드 
    - **출력:** 오버레이에서 읽을 언어입니다.
 3. **OCR 영역 표시**를 눌러 자동으로 잡힌 범위를 확인합니다. 다시 누르면 테두리가 사라집니다.
 4. 필요하면 **추천 영역 새로고침**을 누릅니다. 수동 드래그로 영역을 지정하는 기능은 없습니다.
-5. 게임 채팅이 보일 때 **OCR 테스트**로 인식 원문과 추출 본문을 확인합니다.
+5. 게임 채팅이 보일 때 **OCR 테스트**로 인식 원문과 추출 본문을 확인합니다. 선택한 OCR 엔진 경로로 실제 인식합니다.
 6. **OCR 시작**을 누르고 오버레이가 켜져 있는지 확인합니다.
-7. **시작한 다음 새 메시지**로 시험합니다. 처음부터 화면에 있던 채팅은 기준 화면으로 등록되어 생략될 수 있습니다.
+7. **시작한 다음 새 메시지**로 시험합니다. 처음부터 화면에 있던 채팅은 기준 화면으로 등록되어 생략될 수 있습니다. 생략 시 오버레이에 이유가 표시될 수 있습니다.
 
 영역은 게임 창의 위치·크기를 기준으로 계산하고 창 이동·해상도 변경을 반영합니다. 게임을 찾지 못한 상태의 영역 표시는 모니터 기준 미리보기이며, OCR 시작에는 지원 게임 감지가 필요합니다.
 
@@ -169,16 +177,16 @@ VALORANT 추천 범위는 게임 화면 **좌측 하단 (0%,0%)** 기준으로 �
 
 이 모드에는 Windows 확대 보정·이중 영역·두 프레임 합의가 적용되지 않습니다. **취소 · 메모리 해제**, OCR 중지 또는 앱 종료로 앱이 시작한 OCR 프로세스를 종료할 수 있습니다. 더 정확하거나 더 빠르다고 항상 보장하지 않습니다.
 
-#### Fast OCR · Hybrid OCR (v0.3.0)
+#### Fast OCR · Hybrid OCR
 
-중국어·영문 혼합 채팅이 많을 때 **Fast OCR(PP-OCRv5)** 또는 **Hybrid OCR(Fast + Paddle VL 폴백)**을 선택할 수 있습니다.
+중국어·일본어·영문 혼합 채팅에 **Fast OCR(PP-OCRv5)** 또는 **Hybrid OCR(Fast + Paddle VL 폴백)**을 권장합니다. 일본어는 Windows OCR보다 Fast/Hybrid가 안정적입니다.
 
 | 엔진 | 용도 |
 | --- | --- |
-| Fast OCR | GPU 없이 동작. 중국어·혼합 인식에 적합. `Ocr/Setup-FastOcr.ps1`로 설치 |
+| Fast OCR | GPU 없이 동작. 중국어·일본어·혼합 인식에 적합. `Ocr/Setup-FastOcr.ps1`로 설치 |
 | Hybrid OCR | Fast를 먼저 시도하고 신뢰도가 낮을 때만 Paddle VL로 폴백 |
 | PaddleOCR-VL | 기본값. NVIDIA GPU 필요 |
-| Windows OCR | 가벼운 대안. 언어팩 필요 |
+| Windows OCR | 가벼운 대안. 언어팩 필요. 일본어 인식 한계 있음 |
 
 대시보드 **받는 채팅 · OCR**에서 엔진을 고른 뒤 **OCR 설치 · 준비**를 누르면 선택한 엔진에 맞는 설치·준비가 진행됩니다.
 
@@ -248,6 +256,14 @@ Valtrans translates VALORANT chat between Korean, English and Japanese on Window
 - **FPS terminology:** dictionaries and rules help preserve names, slang, counts, directions and negation, but errors remain possible.
 
 **OCR reads pixels into text. Translation converts that text into another language.** A larger translation model does not fix incorrectly recognized source text.
+
+#### v0.4.0-beta highlights
+
+- **Japanese OCR:** Windows OCR has limited Japanese accuracy; prefer **Fast** or **Hybrid** for JP chat. The startup guide shows engine and language-pack guidance.
+- **OCR test:** the dashboard test uses the currently selected engine path (Windows / Fast / Hybrid / Paddle).
+- **Overlay:** skipped messages can show a short **skip reason** on the overlay.
+- **Aspect ratio:** non-16:9 displays use height-based chat-region scaling (16:9 math unchanged).
+- **Lite:** Japanese↔Korean may pivot through English (up to two model calls). Measure with `scripts/Benchmark-LitePivot.ps1`.
 
 The interface currently uses Korean labels. The labels below match the app; this guide does not imply an English UI option.
 
@@ -368,16 +384,16 @@ The current setup targets NVIDIA GPUs. Allow several GB of downloads and about 1
 
 Windows enhancement, dual-region checks and two-frame agreement do not apply to Paddle. Release its owned worker with **취소 · 메모리 해제**, OCR stop or app exit. Higher accuracy or faster processing is not guaranteed.
 
-#### Fast OCR · Hybrid OCR (v0.3.0)
+#### Fast OCR · Hybrid OCR
 
-For Chinese and mixed-language chat, choose **Fast OCR (PP-OCRv5)** or **Hybrid OCR (Fast with Paddle VL fallback)** on the incoming-chat dashboard.
+For Chinese, Japanese and mixed-language chat, prefer **Fast OCR (PP-OCRv5)** or **Hybrid OCR (Fast with Paddle VL fallback)** on the incoming-chat dashboard.
 
 | Engine | Notes |
 | --- | --- |
-| Fast OCR | CPU-friendly; install with `Ocr/Setup-FastOcr.ps1` |
+| Fast OCR | CPU-friendly; good for Chinese, Japanese and mixed text; install with `Ocr/Setup-FastOcr.ps1` |
 | Hybrid OCR | Fast first, Paddle VL only when confidence is low |
 | PaddleOCR-VL | Default; NVIDIA GPU required |
-| Windows OCR | Lighter alternative; language packs required |
+| Windows OCR | Lighter alternative; language packs required; limited Japanese accuracy |
 
 Use **OCR 설치 · 준비** after selecting the engine.
 

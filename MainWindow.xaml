@@ -95,7 +95,14 @@
                 <Button x:Name="OverlayToggleButton" Grid.Column="2" Content="오버레이 켜기" Click="ToggleOverlay_OnClick"/>
               </Grid>
               <Border x:Name="OcrIssuePanel" Visibility="Collapsed" Background="#FFF1F2" BorderBrush="#E0E6F0" BorderThickness="1" CornerRadius="7" Padding="9,7" Margin="0,9,0,0">
-                <TextBlock x:Name="OcrIssueText" Foreground="#B4233A" FontSize="12" TextWrapping="Wrap"/>
+                <StackPanel>
+                  <TextBlock x:Name="OcrIssueText" Foreground="#B4233A" FontSize="12" TextWrapping="Wrap"/>
+                  <WrapPanel Margin="0,8,0,0">
+                    <Button x:Name="OcrIssueRetryButton" Content="OCR 다시 준비" Click="OcrIssueRetry_OnClick"
+                            Padding="10,4" Margin="0,0,6,0" Visibility="Collapsed"/>
+                    <Button Content="닫기" Click="OcrIssueDismiss_OnClick" Padding="10,4"/>
+                  </WrapPanel>
+                </StackPanel>
               </Border>
 
               <Border x:Name="OcrEnginePanel" Background="#F8FAFD" BorderBrush="#E0E6F0" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,14">

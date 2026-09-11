@@ -6,6 +6,17 @@ namespace Valtrans.Services;
 
 public sealed partial class GlossaryService
 {
+    static GlossaryService()
+    {
+        // Callout recognition evaluates roughly a hundred distinct patterns through the
+        // static Regex helpers, which share an LRU cache that holds 15 by default. Every
+        // OCR line walks that set several times over (accept gate, chat filter, classifier,
+        // candidate scoring, translation), so the cache thrashed and re-parsed almost every
+        // pattern on every call: 0.86 ms per TryTranslateStructuredCallout, down to 0.10 ms
+        // once the whole set fits. Never shrink a cache another component already grew.
+        Regex.CacheSize = Math.Max(Regex.CacheSize, 256);
+    }
+
     private static readonly Dictionary<string, string> CommonLocations = new(StringComparer.OrdinalIgnoreCase)
     {
         ["헤븐"] = "Heaven", ["ヘブン"] = "Heaven", ["天堂"] = "Heaven", ["地狱"] = "Hell", ["헬"] = "Hell", ["ヘル"] = "Hell",
@@ -25,8 +36,10 @@ public sealed partial class GlossaryService
         ["도어"] = "Door", ["ドア"] = "Door", ["네스트"] = "Nest", ["ネスト"] = "Nest",
         ["언더"] = "Under", ["アンダー"] = "Under",
         ["고지대"] = "High Ground", ["高所"] = "High Ground", ["초크"] = "Choke", ["チョーク"] = "Choke",
-        ["링 끝"] = "Ring Edge", ["リング際"] = "Ring Edge", ["비콘"] = "Beacon", ["ビーコン"] = "Beacon",
-        ["제작기"] = "Crafter", ["クラフター"] = "Crafter", ["집라인"] = "Zipline", ["ジップ"] = "Zipline"
+        ["가든"] = "Garden", ["ガーデン"] = "Garden", ["마켓"] = "Market", ["マーケット"] = "Market",
+        ["보일러"] = "Boiler", ["ボイラー"] = "Boiler", ["갈매기"] = "Seagull", ["カモメ"] = "Seagull",
+        ["캐트워크"] = "Catwalk", ["キャットウォーク"] = "Catwalk", ["스크린"] = "Screens", ["スクリーン"] = "Screens",
+        ["파이프"] = "Pipes", ["パイプ"] = "Pipes", ["커비홀"] = "Cubby", ["야드"] = "Yard", ["ヤード"] = "Yard"
     };
 
     private static readonly Dictionary<string, string> FpsTerms = new(StringComparer.OrdinalIgnoreCase)
@@ -94,24 +107,21 @@ public sealed partial class GlossaryService
         ["trade"] = "trade the kill",
         ["rez"] = "resurrect",
         ["res"] = "resurrect",
-        ["armor swap"] = "armor swap",
-        ["bat"] = "shield battery",
-        ["batt"] = "shield battery",
-        ["cell"] = "shield cell",
-        ["medkit"] = "med kit",
-        ["syringe"] = "syringe",
-        ["cracked"] = "enemy shield broken",
-        ["knocked"] = "enemy knocked down",
-        ["third party"] = "third party",
-        ["thirding"] = "third partying",
         ["beam"] = "deal heavy continuous damage",
-        ["evo"] = "evo shield",
-        ["banner"] = "teammate banner",
-        ["respawn"] = "respawn teammate",
-        ["craft"] = "craft at replicator",
-        ["kp"] = "kill points",
-        ["ring"] = "ring",
-        ["zone"] = "zone"
+        ["orb"] = "ultimate orb",
+        ["lineup"] = "pre-aimed utility throw",
+        ["one way"] = "one-way smoke",
+        ["oneway"] = "one-way smoke",
+        ["dry peek"] = "peek without utility",
+        ["pop flash"] = "quick flash around a corner",
+        ["wallbang"] = "shoot through a wall",
+        ["crossfire"] = "two angles covering one spot",
+        ["off angle"] = "unexpected shooting angle",
+        ["half buy"] = "half buy round",
+        ["anti eco"] = "round against a low-buy enemy"
+        // Deliberately absent: "spike", "bonus", "spam". These substitute inside ordinary
+        // sentences ("bonus damage", "plant the spike"), and plant/defuse/tap already
+        // establish the spike for the model.
     };
 
     private static readonly Dictionary<string, (string En, string Ko, string Jp)> CommonChatPhrases =
@@ -291,7 +301,8 @@ public sealed partial class GlossaryService
 
     public bool ContainsKnownGameReference(string text, AppSettings settings)
     {
-        text = ChatTextSanitizer.ContentForLanguageDetection(text);
+        text = OcrNoiseHeuristics.SplitRunTogetherCallout(
+            ChatTextSanitizer.ContentForLanguageDetection(text));
         var terms = SelectedLocations(settings).Keys
             .Concat(SelectedLocations(settings).Values)
             .Where(term => term.Length >= 2)
@@ -389,7 +400,7 @@ public sealed partial class GlossaryService
         var builder = new StringBuilder();
         foreach (var pair in FpsTerms.Where(pair => !ContextSensitiveTerms.Contains(pair.Key)))
             builder.Append(pair.Key).Append('=').Append(pair.Value).Append("; ");
-        builder.Append("Ambiguous slang: infer only from this sentence. 'save me' means help/revive me; 'you are cracked' may be praise. Never assume low HP means exactly 1 HP. Preserve who acted, negation and uncertainty. ");
+        builder.Append("Ambiguous slang: infer only from this sentence. 'save me' means help/revive me; 'you are cracked' is praise for sharp aim in VALORANT. Never assume low HP means exactly 1 HP. Preserve who acted, negation and uncertainty. ");
         builder.Append("Common location vocabulary: ");
         foreach (var pair in SelectedLocations(settings)) builder.Append(pair.Key).Append('=').Append(pair.Value).Append("; ");
         if (settings.CustomGlossary.Count > 0)
@@ -447,7 +458,8 @@ public sealed partial class GlossaryService
 
     public bool TryTranslateStructuredCallout(string text, string target, AppSettings settings, out string translated)
     {
-        text = ChatTextSanitizer.ContentForLanguageDetection(text).Trim();
+        text = OcrNoiseHeuristics.SplitRunTogetherCallout(
+            ChatTextSanitizer.ContentForLanguageDetection(text).Trim());
         translated = "";
         if (text.Length == 0) return false;
         if (TryTranslateChineseTacticalBriefing(text, target, settings, out translated)) return true;
@@ -569,10 +581,12 @@ public sealed partial class GlossaryService
             if (!IsLikelyLocation(location, settings) || IsActionNotLocation(location)) continue;
             var count = NormalizeCount(match.Groups["count"].Value);
             var displayLocation = LocalizeCalloutLocation(location, target);
+            // Keep the counter word. "B 헤븐 2" reads as a place called "B Heaven 2";
+            // "B 헤븐 2명" can only mean two people, and matches the counted-enemy paths.
             translated = target switch
             {
-                "KO" => $"{displayLocation} {count}",
-                "JP" => $"{displayLocation}{count}",
+                "KO" => $"{displayLocation} {count}명",
+                "JP" => $"{displayLocation}{count}人",
                 _ => $"{count} {(Regex.IsMatch(displayLocation, @"^[ABC]\s") ? displayLocation : displayLocation.ToLowerInvariant())}"
             };
             return true;

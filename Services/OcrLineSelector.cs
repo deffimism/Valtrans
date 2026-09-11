@@ -66,7 +66,7 @@ public static class OcrLineSelector
         score += language switch
         {
             "JP" => kana > 0 ? 35d * Math.Min(1, (kana + han) / (double)Math.Max(1, letters))
-                : han >= 2 ? 16 : -4,
+                : han >= 2 && !OcrNoiseHeuristics.HasScatteredHanNoise(body) ? 16 : -4,
             "KO" => hangul > 0 ? 35d * hangul / Math.Max(1, letters) : -4,
             _ => kana + hangul + han == 0 ? 12d * latin / Math.Max(1, letters) : -15
         };

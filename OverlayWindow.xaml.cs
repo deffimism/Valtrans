@@ -25,8 +25,20 @@ public partial class OverlayWindow : System.Windows.Window
     {
         Dispatcher.Invoke(() =>
         {
-            if (_lines.Count > 0 && _lines[^1].Original == original && _lines[^1].Translation == translation) return;
+            if (_lines.Count > 0 && _lines[^1].Original == original && _lines[^1].Translation == translation &&
+                string.IsNullOrEmpty(_lines[^1].SkipReason)) return;
             var line = new OverlayLine(Guid.NewGuid(), original, translation);
+            _lines.Add(line);
+            while (_lines.Count > 5) _lines.RemoveAt(0);
+            _ = ExpireLineAsync(line, displaySeconds);
+        });
+    }
+
+    public void AddSkipNotice(string headline, string detail, string? sourceLine = null, int displaySeconds = 10)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var line = new OverlayLine(Guid.NewGuid(), sourceLine ?? "", headline, detail);
             _lines.Add(line);
             while (_lines.Count > 5) _lines.RemoveAt(0);
             _ = ExpireLineAsync(line, displaySeconds);
@@ -112,4 +124,4 @@ public partial class OverlayWindow : System.Windows.Window
     }
 }
 
-public sealed record OverlayLine(Guid Id, string Original, string Translation);
+public sealed record OverlayLine(Guid Id, string Original, string Translation, string SkipReason = "");

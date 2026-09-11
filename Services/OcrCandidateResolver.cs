@@ -4,6 +4,18 @@ namespace Valtrans.Services;
 
 public static class OcrCandidateResolver
 {
+    /// <summary>Engine confidence a Fast read needs before its content is even scored.</summary>
+    public const double FastConfidenceFloor = 0.90;
+
+    /// <summary>Content score a multi-word Fast read needs to skip the VL fallback.</summary>
+    public const double ContentFloor = 0.85;
+
+    /// <summary>
+    /// Relaxed floor for a lone token the glossary recognizes as a callout. Fast OCR often
+    /// returns a single run-together token ("2BHeaven") that is complete despite the length.
+    /// </summary>
+    public const double GlossaryBackedContentFloor = 0.80;
+
     public static OcrReadResult Choose(OcrReadResult fast, OcrReadResult vl, GlossaryService glossary, AppSettings settings)
     {
         var fastNorm = Normalize(fast.Text);
@@ -23,30 +35,19 @@ public static class OcrCandidateResolver
         return vl.QualityScore >= fast.QualityScore ? vl : fast;
     }
 
-    public static bool IsPlausible(string text, GlossaryService glossary, AppSettings settings, double confidence)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return false;
-        if (confidence >= 0.90) return true;
-        var score = Score(new OcrReadResult(text, "MIXED", QualityScore: confidence), glossary, settings);
-        return score >= 0.75;
-    }
-
     public static bool MeetsHybridFastAccept(OcrReadResult candidate, GlossaryService glossary, AppSettings settings)
     {
-        if (candidate.QualityScore < 0.90) return false;
+        if (candidate.QualityScore < FastConfidenceFloor) return false;
         var words = candidate.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (words.Length < 2 && words.All(word => word.All(ch => ch < 0x2E80)))
         {
             if (glossary.TryTranslateStructuredCallout(candidate.Text, "EN", settings, out _) ||
                 glossary.ContainsKnownGameReference(candidate.Text, settings))
-                return ContentScore(candidate, glossary, settings) >= 0.80;
+                return Score(candidate, glossary, settings) >= GlossaryBackedContentFloor;
             return false;
         }
-        return ContentScore(candidate, glossary, settings) >= 0.85;
+        return Score(candidate, glossary, settings) >= ContentFloor;
     }
-
-    private static double ContentScore(OcrReadResult candidate, GlossaryService glossary, AppSettings settings) =>
-        Score(candidate, glossary, settings);
 
     private static double Score(OcrReadResult candidate, GlossaryService glossary, AppSettings settings)
     {
@@ -62,9 +63,7 @@ public static class OcrCandidateResolver
     }
 
     private static bool ContainsInvalidNoise(string text) =>
-        text.Contains('厄', StringComparison.Ordinal) ||
-        text.Contains('升', StringComparison.Ordinal) ||
-        text.Contains('火', StringComparison.Ordinal) && text.Contains('小', StringComparison.Ordinal);
+        OcrNoiseHeuristics.HasScatteredHanNoise(text);
 
     private static string Normalize(string value) =>
         string.Concat(value.Trim().Normalize(System.Text.NormalizationForm.FormKC)

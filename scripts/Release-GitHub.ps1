@@ -1,6 +1,6 @@
 param(
-    [string]$Version = '0.3.0-beta',
-    [string]$Tag = 'v0.3.0-beta'
+    [string]$Version = '0.4.0-beta',
+    [string]$Tag = 'v0.4.0-beta'
 )
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path "$PSScriptRoot/.."
@@ -16,13 +16,27 @@ git -C $root push origin master
     --repo deffimism/Valtrans `
     --title "Valtrans $Tag" `
     --notes @"
-## v0.3.0-beta
+## v0.4.0-beta
 
-- Test Arena E2E (Capture→OCR) + Agent TestRunner + test.ps1 regression gate
-- Fast OCR (PP-OCRv5) + Hybrid OCR (Fast + Paddle VL fallback)
-- MessageTrace, baseline capture/compare, Chinese/Mixed glossary
-- Translation cache, latest-frame-wins queue, critical fact validator
-- Arena layout persistence, --no-focus-arena for dev workflow
+### OCR · capture
+- Test Arena mirrors VALORANT chat layout (bottom-aligned, inline speaker line); E2E uses production latest-line crop
+- Non-16:9 resolutions: chat region scales from height×16:9 basis (16:9 unchanged)
+- Alt-tab refocus: resolution/profile change detection preserved when game loses foreground
+- Windows OCR: bilinear upscale + 3× enhancement for small crops; Japanese advisory → prefer Fast/Hybrid
+- OCR test supports all selected engines (Windows / Fast / Hybrid / Paddle)
+- OCR noise heuristics, glossary cleanup, regex cache (~10× faster callout matching)
+
+### UX
+- Overlay shows skip reason when a message is not translated
+- OCR issue panel: **OCR 다시 준비** retry button
+- Windows OCR + JP language-pack guidance in startup guide
+
+### Translation
+- Lite JP↔KO uses EN pivot (max 2 model calls); ``Benchmark-LitePivot.ps1`` for measurement
+- Message classifier uses game-context categorization (not all-mode)
+
+### Quality gate
+- 156 unit tests; Full profile E2E smoke (6/6 VALORANT callouts)
 
 ### Verify
 

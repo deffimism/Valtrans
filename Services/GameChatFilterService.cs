@@ -63,6 +63,28 @@ public sealed class GameChatFilterService
         return new ChatFilterResult(true, cleaned, "짧은 인사·감사·사과", "Social");
     }
 
+    /// <summary>
+    /// Category of a message that is already being translated. Unlike <see cref="Filter"/>
+    /// this never drops anything: the caller has decided to keep the line and only needs to
+    /// know how strictly to validate it. Callers must not use <see cref="AllMode"/> for this,
+    /// because that mode short-circuits before any category is computed.
+    /// </summary>
+    public ChatFilterResult Categorize(string text, AppSettings settings)
+    {
+        var body = ChatTextSanitizer.StripChatPrefix(text).Trim();
+        if (!ChatTextSanitizer.HasMeaningfulContent(body))
+            return new ChatFilterResult(false, "", "글자 없는 OCR 결과", "Noise");
+
+        var cleaned = CleanToxicNoise(body);
+        if (!ChatTextSanitizer.HasMeaningfulContent(cleaned))
+            return new ChatFilterResult(true, body, "감정 표현만 포함", "LowRelevance");
+        if (IsTactical(cleaned, settings))
+            return new ChatFilterResult(true, cleaned, "게임 콜아웃", "Tactical");
+        if (IsSocial(cleaned, settings))
+            return new ChatFilterResult(true, cleaned, "짧은 인사·감사·사과", "Social");
+        return new ChatFilterResult(true, cleaned, "게임 관련성 낮음", "LowRelevance");
+    }
+
     private bool IsTactical(string text, AppSettings settings) =>
         _glossary.ContainsTacticalSlang(text, settings) ||
         _glossary.TryTranslateStructuredCallout(text, "EN", settings, out _) ||

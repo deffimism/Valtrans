@@ -138,11 +138,13 @@ public sealed class WindowsOcrService
         var canEnhance = autoEnhance && CanEnhance(region.Width, region.Height);
         if (canEnhance && enhancementMode == OcrEnhancementModes.Enhanced)
         {
+            var preferredScale = EnhancementScale(region.Width, region.Height);
             var enhanceWatch = Stopwatch.StartNew();
-            using var preferredEnhancedBitmap = CreateEnhancedBitmap(captured.Pixels, 2);
+            using var preferredEnhancedBitmap = CreateEnhancedBitmap(captured.Pixels, preferredScale);
             enhanceWatch.Stop();
             var recognitionWatch = Stopwatch.StartNew();
-            var enhancedOnly = await RecognizeSelectedAsync(preferredEnhancedBitmap, selected, positionScale: 0.5);
+            var enhancedOnly = await RecognizeSelectedAsync(preferredEnhancedBitmap, selected,
+                positionScale: 1d / preferredScale);
             recognitionWatch.Stop();
             var enhancedOnlyScore = ScoreRecognition(enhancedOnly);
             if (enhancedOnlyScore < 56 || HasRecognitionArtifacts(enhancedOnly.Text))
@@ -203,11 +205,12 @@ public sealed class WindowsOcrService
             };
         }
 
+        var enhancementScale = EnhancementScale(region.Width, region.Height);
         var preprocessingWatch = Stopwatch.StartNew();
-        using var enhancedBitmap = CreateEnhancedBitmap(captured.Pixels, 2);
+        using var enhancedBitmap = CreateEnhancedBitmap(captured.Pixels, enhancementScale);
         preprocessingWatch.Stop();
         var enhancedWatch = Stopwatch.StartNew();
-        var enhanced = await RecognizeSelectedAsync(enhancedBitmap, selected, positionScale: 0.5);
+        var enhanced = await RecognizeSelectedAsync(enhancedBitmap, selected, positionScale: 1d / enhancementScale);
         enhancedWatch.Stop();
         var enhancedScore = ScoreRecognition(enhanced);
         var useEnhanced = !string.IsNullOrWhiteSpace(enhanced.Text) &&
@@ -362,22 +365,45 @@ public sealed class WindowsOcrService
     private static bool CanEnhance(int width, int height) => width * 2 <= 3600 && height * 2 <= 2200 &&
         (long)width * height * 4 <= 10_000_000;
 
+    /// <summary>
+    /// Upscale factor for the enhanced pass. Windows OCR's Japanese engine needs more pixels per
+    /// glyph than its English or Korean ones: at VALORANT's real chat size 2x dropped katakana
+    /// ("ラッシュ") that 3x resolves, while Latin and Hangul already read fine at 2x. Only small
+    /// crops take the 3x cost — a 4K capture already has plenty of pixels per glyph, and tripling
+    /// it would add tens of milliseconds per frame for nothing.
+    /// </summary>
+    private static int EnhancementScale(int width, int height) =>
+        width * 3 <= 3600 && height * 3 <= 2200 && (long)width * height * 9 <= 2_000_000 ? 3 : 2;
+
     private static SoftwareBitmap CreateEnhancedBitmap(CapturedPixels pixels, int scale)
     {
         var width = pixels.Width * scale;
         var height = pixels.Height * scale;
         var enhanced = new byte[width * height * 4];
+
+        // Bilinear rather than pixel doubling. Chat glyphs are barely a dozen pixels tall, and
+        // duplicating pixels only makes the staircase edges larger, which Windows OCR reads as
+        // stroke noise. Interpolation restores the edge gradient the recognizer needs, which is
+        // what lets small CJK text resolve at all.
+        var (xLow, xHigh, xWeight) = BuildAxisMap(pixels.Width, width, scale);
+        var (yLow, yHigh, yWeight) = BuildAxisMap(pixels.Height, height, scale);
+
         for (var y = 0; y < height; y++)
         {
-            var sourceY = y / scale;
+            var rowLow = yLow[y] * pixels.Width;
+            var rowHigh = yHigh[y] * pixels.Width;
+            var wy = yWeight[y];
             for (var x = 0; x < width; x++)
             {
-                var sourceX = x / scale;
-                var source = (sourceY * pixels.Width + sourceX) * 4;
+                var wx = xWeight[x];
                 var target = (y * width + x) * 4;
-                var blue = pixels.Bytes[source];
-                var green = pixels.Bytes[source + 1];
-                var red = pixels.Bytes[source + 2];
+                var topLeft = (rowLow + xLow[x]) * 4;
+                var topRight = (rowLow + xHigh[x]) * 4;
+                var bottomLeft = (rowHigh + xLow[x]) * 4;
+                var bottomRight = (rowHigh + xHigh[x]) * 4;
+                var blue = Sample(pixels.Bytes, topLeft, topRight, bottomLeft, bottomRight, 0, wx, wy);
+                var green = Sample(pixels.Bytes, topLeft, topRight, bottomLeft, bottomRight, 1, wx, wy);
+                var red = Sample(pixels.Bytes, topLeft, topRight, bottomLeft, bottomRight, 2, wx, wy);
                 var luminance = (red * 3 + green * 6 + blue) / 10;
                 var contrast = luminance < 72 ? 0.62 : 1.42;
                 enhanced[target] = EnhanceChannel(blue, contrast);
@@ -390,8 +416,40 @@ public sealed class WindowsOcrService
         return SoftwareBitmap.CreateCopyFromBuffer(buffer, BitmapPixelFormat.Bgra8, width, height, BitmapAlphaMode.Ignore);
     }
 
-    private static byte EnhanceChannel(byte value, double contrast) =>
+    private static byte EnhanceChannel(int value, double contrast) =>
         (byte)Math.Clamp((int)Math.Round((value - 104) * contrast + 104), 0, 255);
+
+    private static int Sample(byte[] bytes, int topLeft, int topRight, int bottomLeft, int bottomRight,
+        int channel, double weightX, double weightY)
+    {
+        var top = bytes[topLeft + channel] * (1 - weightX) + bytes[topRight + channel] * weightX;
+        var bottom = bytes[bottomLeft + channel] * (1 - weightX) + bytes[bottomRight + channel] * weightX;
+        return (int)Math.Round(top * (1 - weightY) + bottom * weightY);
+    }
+
+    /// <summary>
+    /// Precomputes the two source indices and the blend weight for every output row or column,
+    /// so the per-pixel loop stays free of division. Uses pixel-centre alignment
+    /// ((i + 0.5) / scale - 0.5) to avoid the half-pixel shift that corner alignment introduces.
+    /// </summary>
+    private static (int[] Low, int[] High, double[] Weight) BuildAxisMap(int sourceLength, int targetLength, int scale)
+    {
+        var low = new int[targetLength];
+        var high = new int[targetLength];
+        var weight = new double[targetLength];
+        for (var index = 0; index < targetLength; index++)
+        {
+            var position = (index + 0.5) / scale - 0.5;
+            var floor = (int)Math.Floor(position);
+            var fraction = position - floor;
+            if (floor < 0) { floor = 0; fraction = 0; }
+            if (floor > sourceLength - 2) { floor = Math.Max(0, sourceLength - 2); fraction = sourceLength > 1 ? 1 : 0; }
+            low[index] = floor;
+            high[index] = Math.Min(floor + 1, sourceLength - 1);
+            weight[index] = fraction;
+        }
+        return (low, high, weight);
+    }
 
     internal static OcrReadResult SelectAutoResult(string englishText, string japaneseText)
         => SelectAutoResult(englishText, japaneseText, "");

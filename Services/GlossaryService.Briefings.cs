@@ -9,17 +9,12 @@ public sealed partial class GlossaryService
     {
         translated = "";
         var trimmed = text.Trim().TrimEnd('.', '!', '。');
+        // Only an explicit left/right belongs here. "watch mid" or "watch heaven" is a
+        // location warning and must keep its location, so it falls through to the
+        // generic warning patterns instead of being guessed as a direction.
         var match = Regex.Match(trimmed,
             @"^(?<dir>左|右|左側|右側|왼쪽|오른쪽|좌측|우측)(?:を)?見て[。.!]?$|^(?:watch|check)\s+(?<dir>left|right)[.!]?$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (!match.Success &&
-            Regex.IsMatch(trimmed, @"^watch\s+\S", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
-            !trimmed.Contains("right", StringComparison.OrdinalIgnoreCase) &&
-            trimmed.Length <= 24)
-        {
-            match = Regex.Match("watch left", @"^(?:watch|check)\s+(?<dir>left|right)[.!]?$",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        }
         if (!match.Success) return false;
         var key = match.Groups["dir"].Value.ToLowerInvariant() switch
         {

@@ -36,7 +36,15 @@ public sealed class TranslationRegressionService
             new RegressionCase("캐릭터·피해", "제트 120", "EN", "Jett · 120 dmg"),
             new RegressionCase("체력 콜", "one shot", "KO", "딸피"),
             new RegressionCase("방향 경고 JP", "뒤 조심", "JP", "裏警戒"),
-            new RegressionCase("부정 보호", "no one mid", "EN", "Mid · none")
+            new RegressionCase("부정 보호", "no one mid", "EN", "Mid · none"),
+            new RegressionCase("위치 경고 미드", "watch mid", "KO", "미드 조심"),
+            new RegressionCase("위치 경고 헤븐", "watch heaven", "KO", "헤븐 조심"),
+            new RegressionCase("방향 경고 좌", "watch left", "KO", "왼쪽 조심"),
+            new RegressionCase("인원 조사 KO", "B 헤븐에 두 명", "KO", "B 헤븐 2명"),
+            new RegressionCase("공백 유실 복원", "2BHeaven", "KO", "B 헤븐 2명"),
+            new RegressionCase("FPS 약어 gg", "gg", "KO", "좋은 게임"),
+            new RegressionCase("섬광 대기 · 주어 생략", "섬광 쓸 때까지 기다려", "EN", "wait until I flash"),
+            new RegressionCase("사이트 러시 KO→JP", "Bラッシュ", "JP", "Bラッシュ")
         };
 
         var results = cases.Select(test =>
@@ -113,7 +121,11 @@ public sealed class TranslationRegressionService
             (Source: "you are cracked", Expected: "you are cracked"),
             (Source: "force buy", Expected: "force buy"),
             (Source: "nt Jett", Expected: "nice try Jett"),
-            (Source: "nothing defaulted battalion", Expected: "nothing defaulted battalion")
+            (Source: "nothing defaulted battalion", Expected: "nothing defaulted battalion"),
+            // Ordinary English words must survive the FPS term expansion untouched.
+            (Source: "bonus damage", Expected: "bonus damage"),
+            (Source: "stop spam", Expected: "stop spam"),
+            (Source: "plant the spike", Expected: "plant the spike")
         };
         foreach (var test in expansionCases)
         {

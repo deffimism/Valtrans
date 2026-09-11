@@ -2,8 +2,10 @@
   "scenario": "smoke_basic_001",
   "resolution": "1920x1080",
   "dpi": 100,
+  "tags": ["windows-ocr", "jp", "ko", "en"],
+  "note": "fontSize 22: Windows OCR reads Japanese katakana only from about 22pt. Latin and Hangul resolve at 16pt, and smoke_zh_mixed_001 covers small CJK through Fast OCR.",
   "chat": {
-    "fontSize": 16,
+    "fontSize": 22,
     "opacity": 0.9,
     "lineSpacing": 4
   },

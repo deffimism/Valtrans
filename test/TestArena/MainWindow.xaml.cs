@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
@@ -59,8 +60,15 @@ public partial class MainWindow : Window
         ApplyWindowResolution(_scenario);
         if (!string.IsNullOrWhiteSpace(options.ReadyFilePath))
         {
-            ChatPanel.MaxHeight = double.PositiveInfinity;
-            ChatPanel.MinHeight = 280;
+            // The capture region is frozen from this panel before any line exists, so the
+            // panel must not grow afterwards: a MinHeight box kept expanding and pushed the
+            // newest lines below the region. A fixed box clips the oldest line off the top
+            // instead, which is what VALORANT's chat does.
+            // 384 keeps about three rendered lines inside the bottom 22% latest-line band,
+            // matching how many VALORANT fits there. A 280 box left room for only two, and the
+            // newest line fell out of the band as soon as a third message arrived.
+            ChatPanel.Height = 384;
+            ChatPanel.ClipToBounds = true;
             var scroll = _scenario.Animation.ChatScroll || _scenario.Chat.ScrollEnabled;
             ChatScrollViewer.VerticalScrollBarVisibility = scroll ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
             StatusBar.Visibility = Visibility.Collapsed;
@@ -201,9 +209,14 @@ public partial class MainWindow : Window
         ChatPanel.UpdateLayout();
         if (ChatPanel.ActualWidth < 10 || ChatPanel.ActualHeight < 10) return;
 
+        // Both corners go through PointToScreen. Mixing a physical origin with a
+        // device-independent size under-reports the region by the DPI factor, which on a
+        // 125% display hid the bottom fifth of the panel from every capture.
         var windowTopLeft = PointToScreen(new Point(0, 0));
+        var windowBottomRight = PointToScreen(new Point(ActualWidth, ActualHeight));
         var chatTopLeft = ChatPanel.PointToScreen(new Point(0, 0));
-        var chatSize = new Point(ChatPanel.ActualWidth, ChatPanel.ActualHeight);
+        var chatBottomRight = ChatPanel.PointToScreen(new Point(ChatPanel.ActualWidth, ChatPanel.ActualHeight));
+        var chatSize = new Point(chatBottomRight.X - chatTopLeft.X, chatBottomRight.Y - chatTopLeft.Y);
         var payload = new
         {
             windowTitle = WindowTitle,
@@ -211,8 +224,8 @@ public partial class MainWindow : Window
             {
                 x = (int)windowTopLeft.X,
                 y = (int)windowTopLeft.Y,
-                width = (int)ActualWidth,
-                height = (int)ActualHeight
+                width = (int)(windowBottomRight.X - windowTopLeft.X),
+                height = (int)(windowBottomRight.Y - windowTopLeft.Y)
             },
             chatRegion = new
             {
@@ -247,27 +260,28 @@ public partial class MainWindow : Window
         var spacing = _scenario.Chat.LineSpacing;
         var fuzzed = ArenaVisualFuzzer.FuzzLine(_scenario.Chat, _scenario.Fuzz, _random, _lineCounter++);
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, spacing), Opacity = 0 };
-        var header = new TextBlock
-        {
-            Text = $"[{channel}] {speaker}:",
-            Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
-            FontFamily = new FontFamily("Segoe UI"),
-            FontSize = 13 * _dpiScale
-        };
-        stack.Children.Add(header);
-        var cjk = ContainsCjk(text);
-        var bodyFontSize = (fuzzed.FontSize + (cjk ? 6 : 2)) * _dpiScale;
+        var bodyFontSize = fuzzed.FontSize * _dpiScale;
+        // VALORANT prints the speaker inline with the message. A separate header row
+        // doubled the rows the capture region had to hold and hid the prefix from
+        // StripChatPrefix, so E2E never exercised the sanitizer production depends on.
         var body = new TextBlock
         {
-            Text = text,
             Foreground = Brushes.White,
             FontFamily = ResolveChatFont(text),
             FontSize = bodyFontSize,
             FontWeight = FontWeights.Bold,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 2, 0, 0),
             Opacity = fuzzed.Opacity
         };
+        // VALORANT renders the speaker at the same size as the message and only dims the
+        // colour, so the prefix inherits FontSize from the line. Shrinking it here made the
+        // prefix easier to miss than it is in game.
+        body.Inlines.Add(new Run($"[{channel}] {speaker}: ")
+        {
+            Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+            FontWeight = FontWeights.Normal
+        });
+        body.Inlines.Add(new Run(text));
         if (fuzzed.BlurRadius > 0.1)
             body.Effect = new BlurEffect { Radius = fuzzed.BlurRadius };
         TextOptions.SetTextFormattingMode(body, TextFormattingMode.Display);

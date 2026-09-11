@@ -11,9 +11,12 @@
     <Border x:Name="ChatPanel" HorizontalAlignment="Left" VerticalAlignment="Bottom"
             Margin="24,0,0,24" Width="420" MinHeight="180"
             Background="#0F172A" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="6" Padding="10,8">
+      <!-- VALORANT pins the newest line to the bottom of the chat box, so the arena must
+           grow upward too. The capture region is fixed at the panel height before any line
+           exists, so top-stacked lines leave the production latest-line band empty. -->
       <ScrollViewer x:Name="ChatScrollViewer" VerticalScrollBarVisibility="Disabled"
                     HorizontalScrollBarVisibility="Disabled">
-        <StackPanel x:Name="ChatLinesPanel"/>
+        <StackPanel x:Name="ChatLinesPanel" VerticalAlignment="Bottom"/>
       </ScrollViewer>
     </Border>
     <Border x:Name="StatusBar" Background="#111827" BorderBrush="#1F2937" BorderThickness="0,1,0,0"

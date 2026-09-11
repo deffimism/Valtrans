@@ -98,6 +98,7 @@ public partial class MainWindow : System.Windows.Window
     private string _lastForegroundProfileSignature = "";
     private string _loadedRegionProfileKey = "";
     private IReadOnlyList<string> _lastDiagnosticLines = Array.Empty<string>();
+    private bool _ocrIssueOffersRetry;
 
     public MainWindow()
     {
@@ -718,7 +719,7 @@ public partial class MainWindow : System.Windows.Window
                 : "준비 필요 · 버튼 한 번", liteReady && localReady);
             var regionReady = _settings.CaptureRegion.IsValid;
             SetGuideState(GuideRegionStateText,
-                regionReady ? $"✓ {GameDisplayName(_activeRegionGame)} 영역 저장됨" : "게임 선택 후 추천 영역", regionReady);
+                regionReady ? $"✓ {GameDisplayName(_activeRegionGame)} 영역 저장됨" : "VALORANT 실행 후 추천 영역", regionReady);
 
             var engine = _settings.OcrEngine;
             var paddle = engine == "Paddle";
@@ -732,12 +733,14 @@ public partial class MainWindow : System.Windows.Window
                 : fast ? _fastOcr.IsReady
                 : hybrid ? _fastOcr.IsReady && _paddleOcr.IsReady
                 : missingLanguages.Length == 0;
+            var windowsJpRisk = WindowsOcrAdvisory.NeedsJapaneseEngineAdvisory(engine, selectedLanguages);
             SetGuideState(GuideLanguageStateText,
                 paddle ? (ocrReady ? "✓ PaddleOCR-VL 준비됨" : "PaddleOCR-VL 설치·준비 필요")
                 : fast ? (ocrReady ? "✓ Fast OCR 준비됨" : "Fast OCR 설치·준비 필요")
                 : hybrid ? (ocrReady ? "✓ Hybrid OCR 준비됨" : "Hybrid OCR 설치·준비 필요")
+                : ocrReady && windowsJpRisk ? "△ Windows OCR · JP는 Fast/Hybrid 권장"
                 : ocrReady ? $"✓ {string.Join("/", selectedLanguages)} 언어팩 준비됨"
-                : $"설치 필요 · {string.Join("/", missingLanguages)}", ocrReady);
+                : $"설치 필요 · {string.Join("/", missingLanguages)}", ocrReady && !windowsJpRisk);
 
             GuideNextActionText.Text = (paddle || fast || hybrid) && !ocrReady && !string.IsNullOrEmpty(_paddleSetupIssue)
                 ? _paddleSetupIssue
@@ -757,7 +760,9 @@ public partial class MainWindow : System.Windows.Window
                             : $"받는 채팅의 ‘언어팩’으로 {string.Join("/", missingLanguages)} OCR 기능을 설치하세요."
                         : !regionReady
                             ? "게임 실행 후 ‘추천 영역 새로고침’과 OCR 테스트로 범위를 확인하세요."
-                            : "준비 완료 · 보내기는 단축키, 받기는 ‘OCR 시작’을 사용하세요.";
+                            : windowsJpRisk
+                                ? WindowsOcrAdvisory.JapaneseChatLimitation
+                                : "준비 완료 · 보내기는 단축키, 받기는 ‘OCR 시작’을 사용하세요.";
 
             RecommendedPrepareButton.Content = liteReady && localReady && ocrReady ? "권장 엔진 준비됨" : "권장 엔진 준비";
             RecommendedPrepareButton.IsEnabled = !_recommendedSetupBusy && !_paddleSetupBusy && (!liteReady || !localReady || !ocrReady);
@@ -853,7 +858,9 @@ public partial class MainWindow : System.Windows.Window
         if (!GameWindowDetectionService.TryGetForegroundSupportedGameInfo(detectionGame, out var activeInfo) || activeInfo is null)
         {
             _wasSupportedGameForeground = false;
-            _lastForegroundProfileSignature = "";
+            // Keep the last signature. Clearing it meant a resolution change made while the
+            // player was alt-tabbed went unnoticed: on return the first tick had nothing to
+            // compare against and simply stored the new geometry as if it had always been so.
             _lastForegroundProfileGame = "";
             _hotkey.Unregister();
             if (HotkeyHint is not null)
@@ -1024,17 +1031,19 @@ public partial class MainWindow : System.Windows.Window
             }
         }
 
+        // A failed prepare used to update only the engine status line, so a user watching
+        // the dashboard saw OCR quietly refuse to start. Mirror the reason into the issue panel.
         if (_settings.OcrEngine == "Paddle")
         {
-            if (!await PreparePaddleOcrAsync()) return;
+            if (!await PreparePaddleOcrAsync()) { ShowEnginePrepareIssue(); return; }
         }
         else if (_settings.OcrEngine == "Fast")
         {
-            if (!await PrepareFastOcrAsync()) return;
+            if (!await PrepareFastOcrAsync()) { ShowEnginePrepareIssue(); return; }
         }
         else if (_settings.OcrEngine == "Hybrid")
         {
-            if (!await PrepareHybridOcrAsync()) return;
+            if (!await PrepareHybridOcrAsync()) { ShowEnginePrepareIssue(); return; }
         }
         else if (!TestModeContext.Enabled && !await EnsureLanguagePackAsync()) return;
         else if (TestModeContext.Enabled) RestrictOcrLanguagesToInstalledPacks();
@@ -1778,8 +1787,17 @@ public partial class MainWindow : System.Windows.Window
             "Paddle" => _paddleOcr.Status,
             "Fast" => _fastOcr.Status,
             "Hybrid" => _hybridOcr.Status,
-            _ => "Windows OCR 사용 중 · 언어팩이 필요하면 아래에서 설치"
+            _ => AppendWindowsOcrAdvisory("Windows OCR 사용 중 · 언어팩이 필요하면 아래에서 설치")
         };
+    }
+
+    private string AppendWindowsOcrAdvisory(string baseText)
+    {
+        if (!IsLoaded) return baseText;
+        var languages = ReadOcrLanguages(updateUiWhenEmpty: false);
+        return WindowsOcrAdvisory.NeedsJapaneseEngineAdvisory("Windows", languages)
+            ? $"{baseText}{Environment.NewLine}{WindowsOcrAdvisory.JapaneseChatLimitation}"
+            : baseText;
     }
 
     private async Task<bool> PreparePaddleSetupAsync(bool forceInstall = false)
@@ -1993,8 +2011,9 @@ public partial class MainWindow : System.Windows.Window
         var paddleRuntime = string.IsNullOrWhiteSpace(_settings.PaddleOcrRuntime)
             ? PaddleOcrService.FindRuntime()
             : _settings.PaddleOcrRuntime;
+        var options = HybridOcrOptionsForCurrentMode();
         byte[]? latestLinePng = null;
-        if (!TestModeContext.Enabled)
+        if (options.AllowLatestLineRetry)
         {
             var latestRegion = GetLatestOcrRegion();
             if (region != latestRegion)
@@ -2003,13 +2022,50 @@ public partial class MainWindow : System.Windows.Window
                 latestLinePng = latestCaptured.Png;
             }
         }
-        var result = await _hybridOcr.ReadAsync(captured.Png, latestLinePng, fastRuntime, paddleRuntime, _glossary,
-            _settings, token);
+        var read = await _hybridOcr.ReadDetailedAsync(captured.Png, latestLinePng, fastRuntime, paddleRuntime,
+            _glossary, _settings, options, token);
+        RecordOcrStage($"Hybrid OCR · {DescribeHybridStage(read.Stage)}");
+        var result = read.Result;
         return result with
         {
             FrameHash = captured.FrameHash,
             CaptureDurationMs = captured.CaptureDurationMs,
             TotalDurationMs = watch.Elapsed.TotalMilliseconds
+        };
+    }
+
+    private async Task<bool> EnsureCurrentOcrEngineReadyForTestAsync()
+    {
+        return _settings.OcrEngine switch
+        {
+            "Paddle" => _paddleOcr.IsReady || await PreparePaddleOcrAsync(),
+            "Fast" => _fastOcr.IsReady || await PrepareFastOcrAsync(),
+            "Hybrid" => (_fastOcr.IsReady && _paddleOcr.IsReady) || await PrepareHybridOcrAsync(),
+            _ => await EnsureLanguagePackAsync()
+        };
+    }
+
+    private async Task<OcrReadResult> ReadRegionForCurrentEngineAsync(System.Drawing.Rectangle region,
+        CancellationToken token)
+    {
+        return _settings.OcrEngine switch
+        {
+            "Paddle" => await ReadPaddleRegionAsync(region, token),
+            "Fast" => await ReadFastRegionAsync(region, token),
+            "Hybrid" => await ReadHybridRegionAsync(region, token),
+            _ => await _ocr.ReadDetailedAsync(region, _settings.OcrLanguages, autoEnhance: _settings.OcrAutoEnhance)
+        };
+    }
+
+    private string DescribeOcrTestResult(OcrReadResult result)
+    {
+        return _settings.OcrEngine switch
+        {
+            "Paddle" => $"Paddle · {result.RecognitionDurationMs / 1000:0.0}초",
+            "Fast" => $"Fast · {result.RecognitionDurationMs / 1000:0.0}초",
+            "Hybrid" => $"Hybrid · {DescribeHybridStage(_hybridOcr.LastStage)} · {result.RecognitionDurationMs / 1000:0.0}초",
+            _ when result.EnhancementUsed => "Windows · 자동 보정",
+            _ => "Windows · 원본"
         };
     }
 
@@ -2034,35 +2090,45 @@ public partial class MainWindow : System.Windows.Window
             return;
         }
 
-        var missing = _settings.OcrLanguages.Where(code => !_languagePacks.IsInstalled(code)).ToArray();
-        if (_settings.OcrEngine != "Paddle" && missing.Length > 0)
+        if (!await EnsureCurrentOcrEngineReadyForTestAsync())
         {
-            SetStatus("언어팩 필요", $"{string.Join(", ", missing)} OCR 언어팩을 먼저 설치해 주세요.", true);
+            if (_settings.OcrEngine is "Paddle" or "Fast" or "Hybrid") ShowEnginePrepareIssue();
             return;
         }
 
         TestOcrButton.IsEnabled = false;
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(_windowLifetime.Token);
         _paddleOperation = operation;
-        SetStatus("OCR 테스트 중", "선택 영역에서 현재 보이는 글자를 읽고 있습니다.");
+        var engineLabel = _settings.OcrEngine switch
+        {
+            "Fast" => "Fast OCR",
+            "Hybrid" => "Hybrid OCR",
+            "Paddle" => "Paddle OCR",
+            _ => "Windows OCR"
+        };
+        SetStatus("OCR 테스트 중", $"{engineLabel} · 선택 영역에서 현재 보이는 글자를 읽고 있습니다.");
         try
         {
-            var paddle = _settings.OcrEngine == "Paddle";
-            var result = paddle
-                ? await ReadPaddleRegionAsync(_settings.CaptureRegion.ToRectangle(), operation.Token)
-                : await _ocr.ReadDetailedAsync(_settings.CaptureRegion.ToRectangle(), _settings.OcrLanguages,
-                    autoEnhance: _settings.OcrAutoEnhance);
+            var region = _settings.CaptureRegion.ToRectangle();
+            var result = await ReadRegionForCurrentEngineAsync(region, operation.Token);
             operation.Token.ThrowIfCancellationRequested();
             var preview = string.IsNullOrWhiteSpace(result.Text)
                 ? "인식된 글자가 없습니다. 채팅이 보이는 상태에서 영역을 다시 조정해 주세요."
                 : result.Text.Trim();
+            if (string.IsNullOrWhiteSpace(result.Text) &&
+                WindowsOcrAdvisory.NeedsJapaneseEngineAdvisory(_settings.OcrEngine, _settings.OcrLanguages))
+                preview += $"\n\n{WindowsOcrAdvisory.JapaneseChatLimitation}";
             var bodies = OcrMessageParser.Extract(result);
             preview += $"\n\n── 시스템·닉네임·입력줄 제외 후 본문 ({bodies.Count}줄) ──\n" +
                 (bodies.Count == 0 ? "본문 없음" : string.Join(Environment.NewLine, bodies.Select(line => line.Body)));
-            var qualityMode = paddle ? $"Paddle · {result.RecognitionDurationMs / 1000:0.0}초" : result.EnhancementUsed ? "자동 보정" : "원본";
-            MessageBox.Show(this, preview,
-                paddle ? $"OCR 테스트 · {qualityMode} · 한/영/일 원문" : $"OCR 테스트 · {result.DetectedLanguage} · {qualityMode} · 선택용 추정 점수 {result.QualityScore:0} (정확도 % 아님)",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            var qualityMode = DescribeOcrTestResult(result);
+            var title = _settings.OcrEngine switch
+            {
+                "Paddle" => $"OCR 테스트 · {qualityMode} · 한/영/일 원문",
+                "Fast" or "Hybrid" => $"OCR 테스트 · {qualityMode} · {result.DetectedLanguage}",
+                _ => $"OCR 테스트 · {result.DetectedLanguage} · {qualityMode} · 선택용 추정 점수 {result.QualityScore:0} (정확도 % 아님)"
+            };
+            MessageBox.Show(this, preview, title, MessageBoxButton.OK, MessageBoxImage.Information);
             SetStatus("OCR 테스트 완료", string.IsNullOrWhiteSpace(result.Text)
                 ? "글자 없음"
                 : $"{qualityMode} · {Shorten(result.Text, 55)}");
@@ -2076,7 +2142,7 @@ public partial class MainWindow : System.Windows.Window
         {
             _paddleOperation = null;
             TestOcrButton.IsEnabled = true;
-            PaddleOcrStatusText.Text = _paddleOcr.Status;
+            RefreshOcrEngineUi();
         }
     }
 
@@ -2137,20 +2203,29 @@ public partial class MainWindow : System.Windows.Window
 
     private void RefreshLanguagePackStatus()
     {
-        PaddleQuickActions.Visibility = _settings.OcrEngine == "Paddle" ? Visibility.Visible : Visibility.Collapsed;
-        if (_settings.OcrEngine == "Paddle")
+        var engine = _settings.OcrEngine;
+        if (engine is "Paddle" or "Fast" or "Hybrid")
         {
-            LanguagePackStatusText.Text = "Paddle · Windows 언어팩 불필요";
+            LanguagePackStatusText.Text = engine switch
+            {
+                "Fast" => "Fast OCR · Windows 언어팩 불필요",
+                "Hybrid" => "Hybrid OCR · Windows 언어팩 불필요",
+                _ => "Paddle · Windows 언어팩 불필요"
+            };
             InstallLanguagePackButton.Visibility = Visibility.Collapsed;
             UpdateDetectedOcrLanguage();
             return;
         }
+
         InstallLanguagePackButton.Visibility = Visibility.Visible;
         try
         {
             var states = _languagePacks.GetSupportedLanguageStatus();
-            LanguagePackStatusText.Text = string.Join("   ", new[] { "EN", "JP", "KO" }.Select(code => $"{code} {(states[code] ? "✓" : "–")}"));
             var selected = IsLoaded ? ReadOcrLanguages(updateUiWhenEmpty: false) : _settings.OcrLanguages;
+            var status = string.Join("   ", new[] { "EN", "JP", "KO" }.Select(code => $"{code} {(states[code] ? "✓" : "–")}"));
+            if (WindowsOcrAdvisory.NeedsJapaneseEngineAdvisory(engine, selected))
+                status += $"{Environment.NewLine}JP: {WindowsOcrAdvisory.JapaneseChatLimitation}";
+            LanguagePackStatusText.Text = status;
             var ready = selected.Count > 0 && selected.All(code => states[code]);
             InstallLanguagePackButton.Content = ready ? "설치됨" : "확인 · 설치";
             UpdateDetectedOcrLanguage();
@@ -2164,6 +2239,7 @@ public partial class MainWindow : System.Windows.Window
     private void OcrLanguages_OnChanged(object sender, RoutedEventArgs e)
     {
         if (!IsLoaded) return;
+        RefreshOcrEngineUi();
         RefreshLanguagePackStatus();
         UpdateDetectedOcrLanguage();
         _ = RefreshQuickStartGuideAsync();
@@ -2320,7 +2396,7 @@ public partial class MainWindow : System.Windows.Window
                 var hybrid = _settings.OcrEngine == "Hybrid";
                 if (paddle || fast || hybrid)
                 {
-                    var useFullRegion = ShouldRunFullChatOcr() || UseFullCaptureRegionForTest();
+                    var useFullRegion = ShouldRunFullChatOcr();
                     var captureRegion = useFullRegion ? region : latestRegion;
                     var captured = await _ocr.CaptureFramePngAsync(captureRegion);
                     candidateHash = captured.FrameHash;
@@ -2395,7 +2471,7 @@ public partial class MainWindow : System.Windows.Window
                 }
                 else
                 {
-                    var useFullRegion = ShouldRunFullChatOcr() || UseFullCaptureRegionForTest();
+                    var useFullRegion = ShouldRunFullChatOcr();
                     var readRegion = useFullRegion ? region : latestRegion;
                     candidateHash = await _ocr.CaptureFrameHashAsync(readRegion);
                     if (_lastOcrFrameHash.HasValue && candidateHash == _lastOcrFrameHash.Value &&
@@ -2594,13 +2670,14 @@ public partial class MainWindow : System.Windows.Window
                             continue;
                         }
 
-                        Dispatcher.Invoke(() => SetStatus(
+                        NotifyTranslationSkipped(
                             onlyLowRelevance ? "게임 관련성 낮음 · 생략" : "번역 생략",
                             historyRedisplay
                                 ? "채팅창에 다시 표시된 기존 기록을 걸러냈습니다."
                                 : onlyLowRelevance
                                     ? $"{relevanceSkipped}줄 · 잡담이나 감정 표현으로 판정했습니다."
-                                    : "시스템 문구·기존 기록이거나 이미 출력 언어인 새 줄입니다."));
+                                    : "시스템 문구·기존 기록이거나 이미 출력 언어인 새 줄입니다.",
+                            messageBodies.FirstOrDefault());
                         CommitOcrBaseline(comparison, currentLines);
                         await Task.Delay(_settings.OcrIntervalMs, cancellationToken);
                         continue;
@@ -2712,11 +2789,12 @@ public partial class MainWindow : System.Windows.Window
         CommitLatestLineBaseline(newest);
         if (translatableBodies.Length == 0)
         {
-            Dispatcher.Invoke(() => SetStatus(
+            NotifyTranslationSkipped(
                 onlyLowRelevance ? "게임 관련성 낮음 · 생략" : "번역 생략",
                 onlyLowRelevance
                     ? $"{relevanceSkipped}줄 · 잡담이나 감정 표현으로 판정했습니다."
-                    : "시스템 문구·기존 기록이거나 이미 출력 언어인 새 줄입니다."));
+                    : "시스템 문구·기존 기록이거나 이미 출력 언어인 새 줄입니다.",
+                messageBodies.FirstOrDefault());
             await Task.Delay(_settings.OcrIntervalMs, cancellationToken);
             return true;
         }
@@ -2740,6 +2818,17 @@ public partial class MainWindow : System.Windows.Window
         _lastHandledLatestLine = newest.Normalized;
         _lastOcrText = newest.Normalized;
         _previousOcrLines = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { newest.Normalized };
+    }
+
+    private void NotifyTranslationSkipped(string headline, string detail, string? sourceLine = null)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            SetStatus(headline, detail, true);
+            if (_overlay is not null && _overlay.IsVisible)
+                _overlay.AddSkipNotice(headline, detail, ShortenLines(sourceLine ?? "", 120),
+                    Math.Clamp(_settings.OverlayDisplaySeconds, 6, 20));
+        });
     }
 
     private void QueueLatestTranslation(string text, int skippedCount, TraceLineContext? traceContext = null,
@@ -2896,6 +2985,20 @@ public partial class MainWindow : System.Windows.Window
                 SetStatus(result.UsedSafeBriefing ? "즉시 안전 브리핑 표시" : "새 채팅 번역됨", Shorten(result.Text, 75));
             });
             RecordOcrStage("번역 완료 1줄 · 완료 즉시 표시");
+            var liteMetrics = _translator.LastLitePivotMetrics;
+            if (liteMetrics?.UsedEnglishPivot == true)
+            {
+                _pipelineLog.Record("translation", "lite_pivot", new Dictionary<string, object?>
+                {
+                    ["source"] = liteMetrics.SourceLanguage,
+                    ["target"] = liteMetrics.TargetLanguage,
+                    ["modelCalls"] = liteMetrics.ModelCalls,
+                    ["pivotMs"] = liteMetrics.PivotLegMs,
+                    ["secondMs"] = liteMetrics.SecondLegMs,
+                    ["totalMs"] = liteMetrics.TotalMs,
+                    ["calloutShortCircuits"] = liteMetrics.CalloutShortCircuits
+                });
+            }
             _pipelineLog.RecordTranslation("completed", translationWatch.Elapsed.TotalMilliseconds, "ok",
                 text.Length, Shorten(text, 48));
             CompleteMessageTrace(text, result.Text, result.UsedSafeBriefing, translationWatch.Elapsed.TotalMilliseconds,
@@ -3310,19 +3413,63 @@ public partial class MainWindow : System.Windows.Window
         return previous[left.Length];
     }
 
-    private void ShowOcrIssue(string title, string detail)
+    private void ShowEnginePrepareIssue()
     {
+        if (TestModeContext.Enabled) return;
+        var engine = _settings.OcrEngine switch
+        {
+            "Fast" => "Fast OCR",
+            "Hybrid" => "Hybrid OCR",
+            _ => "Paddle OCR"
+        };
+        ShowOcrIssue($"{engine} 준비 실패",
+            string.IsNullOrEmpty(_paddleSetupIssue)
+                ? "‘OCR 설치 · 준비’를 다시 누르거나 Windows OCR을 선택하세요."
+                : _paddleSetupIssue,
+            offerRetry: true);
+    }
+
+    private void ShowOcrIssue(string title, string detail, bool offerRetry = false)
+    {
+        _ocrIssueOffersRetry = offerRetry;
+        OcrIssueRetryButton.Visibility = offerRetry ? Visibility.Visible : Visibility.Collapsed;
         OcrIssueText.Text = $"{title} · {detail}";
         OcrIssuePanel.Visibility = Visibility.Visible;
         SetStatus(title, detail, true);
     }
 
+    private async void OcrIssueRetry_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!_ocrIssueOffersRetry) return;
+        OcrIssueRetryButton.IsEnabled = false;
+        try
+        {
+            if (WindowsOcrAdvisory.UsesWindowsOcr(_settings.OcrEngine))
+                await EnsureLanguagePackAsync();
+            else
+            {
+                var ok = await PrepareSelectedOcrAsync();
+                if (!ok) ShowEnginePrepareIssue();
+                else ClearOcrIssue();
+            }
+        }
+        finally
+        {
+            OcrIssueRetryButton.IsEnabled = true;
+        }
+    }
+
+    private void OcrIssueDismiss_OnClick(object sender, RoutedEventArgs e) => ClearOcrIssue();
+
     private void ClearOcrIssue()
     {
         if (OcrIssuePanel.Visibility != Visibility.Visible) return;
+        _ocrIssueOffersRetry = false;
+        OcrIssueRetryButton.Visibility = Visibility.Collapsed;
         OcrIssuePanel.Visibility = Visibility.Collapsed;
         OcrIssueText.Text = "";
-        SetStatus("OCR 실행 중", "새 채팅을 감지하면 오버레이에 번역합니다.");
+        if (_ocrCancellation is not null)
+            SetStatus("OCR 실행 중", "새 채팅을 감지하면 오버레이에 번역합니다.");
     }
 
     private static string OcrCaptureMessage(Exception ex)
@@ -3682,13 +3829,28 @@ public partial class MainWindow : System.Windows.Window
         var detected = GameWindowDetectionService.Detect(_activeRegionGame);
         RegionHintText.Text = detected is null
             ? "현재 모니터 기준 미리보기 · 게임 실행 시 다시 계산합니다."
-            : Math.Abs((double)reference.Width / reference.Height - 16.0 / 9) > 0.03
-                ? "16:9 이외의 화면 비율입니다. 영역 표시로 추천 범위를 확인하세요."
+            : !OcrRegionRecommendationService.IsReferenceAspect(reference.Width, reference.Height)
+                ? $"{AspectLabel(reference.Width, reference.Height)} · 높이 기준 HUD 배율로 보정 · 영역 표시로 확인 권장"
                 : _activeRegionGame == "VALORANT"
                     ? "발로란트 16:9 기준 · 입력줄 제외 · 창 위치와 해상도를 자동 반영"
                     : "게임별 참고 영역 · 영역 표시로 실제 채팅 위치를 확인하세요.";
         RefreshOcrRegionPreview();
     }
+
+    // Reduces a resolution to the ratio players recognise ("4:3", "21:9") so the region hint
+    // names the aspect instead of only warning that it is not 16:9.
+    private static string AspectLabel(int width, int height)
+    {
+        if (width <= 0 || height <= 0) return "알 수 없는 비율";
+        var divisor = Gcd(width, height);
+        var w = width / divisor;
+        var h = height / divisor;
+        // 1920x1200 reduces to 8:5; players call that 16:10.
+        if (w <= 64 && h <= 64) return h % 5 == 0 && w % 8 == 0 ? $"{w / 8 * 16}:{h / 5 * 10}" : $"{w}:{h}";
+        return $"{(double)width / height:0.##}:1";
+    }
+
+    private static int Gcd(int a, int b) => b == 0 ? a : Gcd(b, a % b);
 
     private System.Drawing.Rectangle GetLatestOcrRegion()
     {
@@ -3899,7 +4061,19 @@ public partial class MainWindow : System.Windows.Window
         (TestModeContext.Enabled && _ocrBaselinePending) ||
         (!TestModeContext.Enabled && (IsFullChatInputMode() || _ocrBaselinePending));
 
-    private bool UseFullCaptureRegionForTest() => TestModeContext.Enabled;
+    // Fast and PaddleOCR-VL share one GPU. Loading both inside an E2E run stalls the arena,
+    // so test mode stops after Fast and reports the unverified stage instead of hanging.
+    private static HybridOcrOptions HybridOcrOptionsForCurrentMode() =>
+        TestModeContext.Enabled ? HybridOcrOptions.FastOnly : HybridOcrOptions.Production;
+
+    private static string DescribeHybridStage(string stage) => stage switch
+    {
+        HybridOcrService.StageFastFullRegion => "Fast 채택 · 전체 영역",
+        HybridOcrService.StageFastLatestLine => "Fast 채택 · 최신 1줄 재판독",
+        HybridOcrService.StageVlFallback => "VL 보정 사용 · Fast 신뢰도 낮음",
+        HybridOcrService.StageFastUnverified => "Fast 결과 그대로 · VL 보정 생략",
+        _ => stage
+    };
 
     private bool ShouldForceFullDualOcr(DateTime lastFullCheckUtc) =>
         _ocrBaselinePending ||

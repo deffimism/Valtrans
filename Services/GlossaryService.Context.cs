@@ -39,7 +39,7 @@ public sealed partial class GlossaryService
             foreach (var alias in phrase.Aliases) Add(alias, phrase.Translate(target), "phrase reference");
         foreach (var pair in FpsTerms.Where(p => !ContextSensitiveTerms.Contains(p.Key)))
             Add(pair.Key, pair.Value, "FPS abbreviation");
-        Add("cracked", "When praising a player's aim: highly skilled. When describing shields: broken. Decide from the subject and game.", "ambiguous word");
+        Add("cracked", "In VALORANT this is almost always praise: a player with very sharp aim. Only read it as broken armor when the sentence is clearly about a shield.", "ambiguous word");
         Add("save", "Can mean rescue/help a person, or keep equipment for another round. Preserve the object of the verb.", "ambiguous word");
         Add("low", "Little health when describing an opponent; not necessarily one-shot. Otherwise use the ordinary meaning.", "ambiguous word");
         return entries.Count == 0 ? "None. Translate the sentence without guessing extra game context."

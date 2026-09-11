@@ -21,10 +21,13 @@ public sealed class MessageClassifierService
         if (IsSystemMessage(text))
             return new MessageClassification { Type = "System", Reason = "system or match notice" };
 
-        var result = _filter.Filter(text, GameChatFilterService.AllMode, settings);
+        // AllMode returns the "All" category before any tactical/social decision is made,
+        // which used to label every non-system line Tactical and apply the strict fact
+        // validator to ordinary conversation.
+        var result = _filter.Categorize(text, settings);
         return result.Category switch
         {
-            "Tactical" or "All" => new MessageClassification { Type = "Tactical", Reason = result.Reason },
+            "Tactical" => new MessageClassification { Type = "Tactical", Reason = result.Reason },
             "Social" => new MessageClassification { Type = "Social", Reason = result.Reason },
             "Noise" or "LowRelevance" => new MessageClassification { Type = "Noise", Reason = result.Reason },
             _ => new MessageClassification { Type = "Unclassified", Reason = result.Reason }

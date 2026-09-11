@@ -21,6 +21,24 @@ public static class OcrRegionRecommendationService
     public const double ValorantInputTopFromBottom = 0.0469;
     public const double ValorantChatTopFromBottom = 0.2717;
 
+    /// <summary>Aspect ratio the fractions above were measured against.</summary>
+    public const double ValorantReferenceAspect = 16.0 / 9.0;
+
+    /// <summary>
+    /// Width the horizontal fractions are measured against. VALORANT scales its HUD with
+    /// screen height and anchors chat to the bottom-left corner, so the chat box keeps the
+    /// same pixel size whenever height is unchanged. Multiplying the fractions by the real
+    /// width instead stretched the box on ultrawide and shrank it on the 4:3 resolutions
+    /// VALORANT players commonly use. At exactly 16:9 this returns the real width, so the
+    /// recommendation is unchanged there.
+    /// </summary>
+    public static double HorizontalBasis(int width, int height) =>
+        IsReferenceAspect(width, height) ? width : height * ValorantReferenceAspect;
+
+    /// <summary>True when bounds are close enough to 16:9 for the measured fractions to apply directly.</summary>
+    public static bool IsReferenceAspect(int width, int height) =>
+        height > 0 && Math.Abs((double)width / height - ValorantReferenceAspect) <= 0.03;
+
     public static RelativeOcrRegion DefaultValorantLatestRegion() => new()
     {
         X = 0,
@@ -31,9 +49,10 @@ public static class OcrRegionRecommendationService
 
     private static CaptureRegion RecommendValorant(Rectangle bounds)
     {
-        var left = Math.Clamp((int)Math.Round(bounds.Width * ValorantLeft), 0, bounds.Width - 20);
+        var basis = HorizontalBasis(bounds.Width, bounds.Height);
+        var left = Math.Clamp((int)Math.Round(basis * ValorantLeft), 0, bounds.Width - 20);
         var top = Math.Clamp((int)Math.Round(bounds.Height * (1 - ValorantChatTopFromBottom)), 0, bounds.Height - 20);
-        var right = Math.Clamp((int)Math.Round(bounds.Width * ValorantRight), left + 20, bounds.Width);
+        var right = Math.Clamp((int)Math.Round(basis * ValorantRight), left + 20, bounds.Width);
         var bottom = Math.Clamp((int)Math.Round(bounds.Height * (1 - ValorantInputTopFromBottom)), top + 20, bounds.Height);
         return new CaptureRegion
         {

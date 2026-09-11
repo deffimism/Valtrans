@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -16,6 +17,7 @@ public sealed class TranslatorService
     public event EventHandler<HybridRouteEventArgs>? HybridRouteSelected;
     public event EventHandler<TranslationSafetyEventArgs>? TranslationSafetyAdjusted;
     public string LastHybridRoute { get; private set; } = "";
+    public LitePivotMetrics? LastLitePivotMetrics { get; private set; }
 
     public TranslatorService(GlossaryService glossary, LocalAiService localAi, ValtransLiteService lite)
     {
@@ -236,18 +238,18 @@ public sealed class TranslatorService
         bool preserveLines, CancellationToken cancellationToken)
     {
         if (!preserveLines)
-            return await TranslateHybridLineAsync(text, targetLanguage, settings, preferLocal: true, cancellationToken);
+            return await TranslateHybridLineAsync(text, targetLanguage, settings, cancellationToken);
 
         var lines = text.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries);
         var output = new List<string>(lines.Length);
         foreach (var line in lines)
-            output.Add(await TranslateHybridLineAsync(line, targetLanguage, settings,
-                preferLocal: true, cancellationToken));
+            output.Add(await TranslateHybridLineAsync(line, targetLanguage, settings, cancellationToken));
         return string.Join(Environment.NewLine, output);
     }
 
+    // Rules first, then the local translation model, then Valtrans Lite as a fallback.
     private async Task<string> TranslateHybridLineAsync(string text, string targetLanguage, AppSettings settings,
-        bool preferLocal, CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
     {
         if (DetectSourceLanguage(text).Equals(targetLanguage, StringComparison.OrdinalIgnoreCase)) return text;
         if (_glossary.TryTranslateExactShortcut(text, targetLanguage, out var exact))
@@ -266,25 +268,22 @@ public sealed class TranslatorService
         Exception? localError = null;
         Exception? liteError = null;
 
-        if (preferLocal)
+        try
         {
-            try
-            {
-                var result = await TranslateWithChatModelAsync(text, targetLanguage, settings, false,
-                    cancellationToken, localModel: localModel);
-                ReportHybridRoute(localDisplayName, "번역 특화 로컬 모델");
-                return result;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                localError = ex;
-            }
+            var result = await TranslateWithChatModelAsync(text, targetLanguage, settings, false,
+                cancellationToken, localModel: localModel);
+            ReportHybridRoute(localDisplayName, "번역 특화 로컬 모델");
+            return result;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            localError = ex;
         }
 
         try
         {
             var liteResult = await TranslateWithLiteAsync(text, targetLanguage, settings, false, cancellationToken);
-            ReportHybridRoute(preferLocal ? "Lite 대체" : "Lite", "기본 이상 징후 검사 통과 · 정확도 보장 아님");
+            ReportHybridRoute("Lite 대체", "기본 이상 징후 검사 통과 · 정확도 보장 아님");
             return liteResult;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -292,36 +291,8 @@ public sealed class TranslatorService
             liteError = ex;
         }
 
-        if (!preferLocal)
-        {
-            try
-            {
-                var refined = await TranslateWithChatModelAsync(text, targetLanguage, settings, false,
-                    cancellationToken, localModel: localModel);
-                ReportHybridRoute(preferLocal ? localDisplayName : $"{localDisplayName} 보정", "Lite 결과 보정");
-                return refined;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                localError = ex;
-            }
-        }
-
         throw new InvalidOperationException(
             $"스마트 복합 번역 실패 · {localDisplayName}: {localError?.Message ?? "사용 불가"} · Lite: {liteError?.Message ?? "사용 불가"}");
-    }
-
-    private static bool ShouldPreferLocalModel(string text)
-    {
-        var body = ChatTextSanitizer.ContentForLanguageDetection(text);
-        if (ChatTextSanitizer.LooksLikeRomanizedJapanese(body)) return true;
-        if (body.Length >= 24 || body.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 7) return true;
-        var hasLatin = body.Any(ch => ch is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z'));
-        var hasHangul = body.Any(ch => ch is >= '\uAC00' and <= '\uD7AF');
-        var hasJapanese = body.Any(ch => ch is (>= '\u3040' and <= '\u30FF') or (>= '\u4E00' and <= '\u9FFF'));
-        if ((hasLatin ? 1 : 0) + (hasHangul ? 1 : 0) + (hasJapanese ? 1 : 0) >= 2) return true;
-        return Regex.IsMatch(body,
-            @"(?ix)(?:\?|왜|어떻게|부탁|같아|거야|아마|추정|하지\s*마|없어|でしょう|です|ます|かも|しない|いない|maybe|probably|don['’]?t|no\s+one)");
     }
 
     private void ReportHybridRoute(string route, string reason)
@@ -389,36 +360,59 @@ public sealed class TranslatorService
     {
         var plans = originals.Select(line => LiteUncertaintyPlan.Create(line, settings, _glossary)).ToArray();
         var inputs = normalized.Select((line, index) => plans[index]?.Core ?? line).ToArray();
+        var batchWatch = Stopwatch.StartNew();
         IReadOnlyList<string> raw;
         if (source == "JP" && target == "KO" || source == "KO" && target == "JP")
         {
             // Inspect the English pivot before the second model can discard facts.
             // Known complete pivot callouts use the same dictionary as game chat.
+            var pivotWatch = Stopwatch.StartNew();
             var pivot = await _lite.TranslateAsync(inputs, source, "EN", cancellationToken);
+            pivotWatch.Stop();
             var resolved = new string[inputs.Length];
             var pending = new List<string>();
             var indexes = new List<int>();
+            var calloutShortCircuits = 0;
             for (var index = 0; index < inputs.Length; index++)
             {
                 var originalCore = plans[index]?.Core ?? originals[index];
                 var checkedPivot = LiteTranslationGuard.Validate(originalCore, pivot[index], "EN", settings, _glossary);
                 if (_glossary.TryTranslateStructuredCallout(checkedPivot, target, settings, out var callout))
+                {
                     resolved[index] = callout;
+                    calloutShortCircuits++;
+                }
                 else
                 {
                     pending.Add(checkedPivot);
                     indexes.Add(index);
                 }
             }
+            var secondLegMs = 0d;
             if (pending.Count > 0)
             {
+                var secondWatch = Stopwatch.StartNew();
                 var second = await _lite.TranslateAsync(pending, "EN", target, cancellationToken);
+                secondWatch.Stop();
+                secondLegMs = secondWatch.Elapsed.TotalMilliseconds;
                 for (var index = 0; index < indexes.Count; index++)
                     resolved[indexes[index]] = LiteTranslationGuard.Validate(pending[index], second[index], target, settings, _glossary);
             }
             raw = resolved;
+            batchWatch.Stop();
+            LastLitePivotMetrics = new LitePivotMetrics(source, target, true,
+                pending.Count > 0 ? 2 : 1, pivotWatch.Elapsed.TotalMilliseconds, secondLegMs,
+                batchWatch.Elapsed.TotalMilliseconds, inputs.Length, calloutShortCircuits);
         }
-        else raw = await _lite.TranslateAsync(inputs, source, target, cancellationToken);
+        else
+        {
+            var directWatch = Stopwatch.StartNew();
+            raw = await _lite.TranslateAsync(inputs, source, target, cancellationToken);
+            directWatch.Stop();
+            batchWatch.Stop();
+            LastLitePivotMetrics = new LitePivotMetrics(source, target, false, 1, 0, 0,
+                directWatch.Elapsed.TotalMilliseconds, inputs.Length, 0);
+        }
         var result = raw.ToArray();
         for (var index = 0; index < plans.Length; index++)
         {
