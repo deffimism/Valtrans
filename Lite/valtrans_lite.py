@@ -27,9 +27,12 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 MODEL_ROOT = Path(os.environ.get("VALTRANS_LITE_MODELS", Path(sys.executable).parent / "models"))
-MAX_LOADED_MODELS = 2
+# KO/JP both pivot through EN: bidirectional chat uses all four fixed pairs.
+# Two slots repeatedly reload models when sending and receiving alternate.
+MAX_LOADED_MODELS = 4
 IDLE_RELEASE_SECONDS = 10 * 60
-_CACHE: OrderedDict[tuple[str, str], tuple[ctranslate2.Translator, sentencepiece.SentencePieceProcessor]] = OrderedDict()
+_CACHE: OrderedDict[tuple[str, str], tuple[ctranslate2.Translator,
+    sentencepiece.SentencePieceProcessor, sentencepiece.SentencePieceProcessor]] = OrderedDict()
 _CACHE_LOCK = threading.RLock()
 _LAST_ACTIVITY = time.monotonic()
 
@@ -38,14 +41,20 @@ def _package_dir(source: str, target: str) -> Path:
     return MODEL_ROOT / f"{source}_{target}"
 
 
-def _model_files(source: str, target: str) -> tuple[Path, Path]:
+def _model_files(source: str, target: str) -> tuple[Path, Path, Path]:
     package = _package_dir(source, target)
-    return package / "model", package / "sentencepiece.model"
+    encoder, decoder = package / "source.spm", package / "target.spm"
+    if encoder.exists() or decoder.exists():
+        # Never silently mix a partial separate-vocabulary package with an old
+        # shared tokenizer. The two vocabularies have different token IDs.
+        return package / "model", encoder, decoder
+    shared = package / "sentencepiece.model"
+    return package / "model", shared, shared
 
 
 def _pair_ready(source: str, target: str) -> bool:
-    model, tokenizer = _model_files(source, target)
-    return (model / "model.bin").is_file() and tokenizer.is_file()
+    model, encoder, decoder = _model_files(source, target)
+    return (model / "model.bin").is_file() and encoder.is_file() and decoder.is_file()
 
 
 def _load_pair(source: str, target: str):
@@ -57,7 +66,7 @@ def _load_pair(source: str, target: str):
             _CACHE.move_to_end(key)
             return _CACHE[key]
 
-    model_dir, tokenizer_path = _model_files(source, target)
+    model_dir, encoder_path, decoder_path = _model_files(source, target)
     if not _pair_ready(source, target):
         raise RuntimeError(f"모델이 설치되지 않았습니다: {source.upper()}→{target.upper()}")
 
@@ -69,20 +78,22 @@ def _load_pair(source: str, target: str):
         inter_threads=1,
         intra_threads=max(1, min(4, cpu_count // 2)),
     )
-    tokenizer = sentencepiece.SentencePieceProcessor(model_file=str(tokenizer_path))
+    encoder = sentencepiece.SentencePieceProcessor(model_file=str(encoder_path))
+    decoder = encoder if encoder_path == decoder_path else sentencepiece.SentencePieceProcessor(model_file=str(decoder_path))
     with _CACHE_LOCK:
         while len(_CACHE) >= MAX_LOADED_MODELS:
-            _CACHE.popitem(last=False)
-        _CACHE[key] = (translator, tokenizer)
+            _, (old_translator, _, _) = _CACHE.popitem(last=False)
+            old_translator.unload_model()
+        _CACHE[key] = (translator, encoder, decoder)
         _CACHE.move_to_end(key)
         gc.collect()
-        return translator, tokenizer
+        return translator, encoder, decoder
 
 
 def _release_all_models() -> int:
     with _CACHE_LOCK:
         released = len(_CACHE)
-        for translator, _ in _CACHE.values():
+        for translator, _, _ in _CACHE.values():
             try:
                 translator.unload_model()
             except Exception:
@@ -99,21 +110,24 @@ def _idle_release_worker():
         with _CACHE_LOCK:
             idle = time.monotonic() - _LAST_ACTIVITY
             has_models = bool(_CACHE)
-        if has_models and idle >= IDLE_RELEASE_SECONDS:
-            _release_all_models()
+            # Recheck and release in one critical section: a fresh request must
+            # not race an idle decision taken before that request started.
+            if has_models and idle >= IDLE_RELEASE_SECONDS:
+                _release_all_models()
 
 
 def _translate_pair(texts: list[str], source: str, target: str) -> list[str]:
-    translator, tokenizer = _load_pair(source, target)
-    encoded = [tokenizer.encode(text, out_type=str) for text in texts]
-    results = translator.translate_batch(
-        encoded,
-        beam_size=1,
-        max_batch_size=16,
-        max_decoding_length=128,
-        repetition_penalty=1.05,
-    )
-    return [tokenizer.decode(result.hypotheses[0]).strip() for result in results]
+    with _CACHE_LOCK:
+        translator, encoder, decoder = _load_pair(source, target)
+        encoded = [encoder.encode(text, out_type=str) for text in texts]
+        results = translator.translate_batch(
+            encoded,
+            beam_size=1,
+            max_batch_size=16,
+            max_decoding_length=128,
+            repetition_penalty=1.05,
+        )
+        return [decoder.decode(result.hypotheses[0]).strip() for result in results]
 
 
 def translate(texts: list[str], source: str, target: str) -> list[str]:

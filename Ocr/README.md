@@ -1,6 +1,6 @@
 # Paddle OCR 실험 모드 / Experimental Paddle OCR
 
-v0.4.0-beta의 기본 OCR은 PaddleOCR-VL입니다. 일본어 채팅은 Fast 또는 Hybrid OCR을 권장합니다. 중국어·혼합 언어에는 Fast OCR 또는 Hybrid(Fast+VL)도 선택할 수 있습니다. 시작 가이드에서 번역 엔진과 OCR을 함께 준비할 수 있습니다.
+기본 OCR은 PaddleOCR-VL입니다. GPU를 사용하지 않는 대안으로 Fast OCR을, 필요할 때 VL을 함께 사용하는 대안으로 Hybrid OCR을 선택할 수 있습니다. 어떤 엔진도 모든 글꼴·언어에서 정확하다고 보장하지 않으므로 실제 채팅으로 OCR 테스트를 먼저 해주세요. 시작 가이드에서 번역 엔진과 OCR을 함께 준비할 수 있습니다.
 기존 Windows OCR 설정도 업데이트 후 첫 실행에서 Paddle로 한 번 전환됩니다. 이후에는 Windows OCR을 직접 선택하고 저장할 수 있습니다. NVIDIA GPU 환경이 맞지 않으면 Windows OCR을 대안으로 선택하세요.
 
 ## 한국어
@@ -32,9 +32,14 @@ v0.4.0-beta의 기본 OCR은 PaddleOCR-VL입니다. 일본어 채팅은 Fast 또
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Ocr\Setup.ps1 -RuntimeDirectory "$env:LOCALAPPDATA\Valtrans\OcrRuntime"
 ```
 
-## Fast OCR (PP-OCRv5) — 중국어·혼합 언어
+## Fast OCR (PP-OCRv5) — CPU 대안
 
-GPU 없이 동작하는 빠른 OCR 경로입니다. PaddleOCR-VL과 별도 프로세스·별도 설치 폴더를 사용합니다. Hybrid 모드에서는 Fast를 먼저 시도하고 신뢰도가 낮을 때만 VL로 폴백합니다.
+GPU 없이 동작하는 OCR 경로입니다. 이름이 Fast여도 모든 PC에서 VL보다 빠른 것은 아닙니다. PaddleOCR-VL과 별도 프로세스·별도 설치 폴더를 사용합니다. Hybrid 모드에서는 Fast를 먼저 시도하고 신뢰도가 낮을 때 VL을 확인합니다.
+
+- VALORANT 채팅은 줄 위치를 먼저 찾고, 잘라낼 부분이 실제 채널·닉네임 접두사인지 확인한 경우에만 본문을 따로 읽습니다. 불확실한 배치는 일반 검출로 돌아갑니다.
+- 한국어 선택 시 한국어 전용 PP-OCRv5 인식 모델도 사용합니다. 처음 준비할 때 추가 공식 모델을 내려받습니다. 한국어를 선택하지 않으면 요청에서 한국어 인식 결과를 사용하지 않습니다.
+- 문서 회전·펴기 보정은 사용하지 않습니다. 채팅 인식 모델은 CPU 작업 스레드를 4개로 제한하지만, 게임 부하나 전체 프로세스의 CPU 사용량을 보장하는 제한은 아닙니다.
+- 기존 Fast 설치가 새 인식 모듈을 찾지 못하면 아래 설치 명령을 다시 실행하세요. 주요 라이브러리는 실제 검사한 버전으로 맞춥니다. 언어 모델 파일은 실행 파일에 포함되지 않습니다.
 
 설치:
 
@@ -52,7 +57,7 @@ Test Mode / TestRunner에서 `--ocr-engine Fast` 또는 `Hybrid`로 지정합니
 
 ## English
 
-PaddleOCR-VL is the default in v0.4.0-beta. For Japanese chat, prefer Fast or Hybrid OCR over Windows OCR. Fast OCR and Hybrid are also available for Chinese and mixed-language chat. Existing Windows OCR settings switch to Paddle once after this update; a later manual Windows selection is preserved after saving. Use Windows OCR as a lighter alternative if needed.
+PaddleOCR-VL is the default in v0.4.0-beta. Windows OCR is a lightweight alternative but can misread Japanese game chat. Fast and Hybrid also support multilingual chat; neither the name “Fast” nor a high recognition score guarantees better accuracy or latency. Check your actual chat with OCR Test before changing engines. Existing Windows OCR settings switch to Paddle once after this update; a later manual Windows selection is preserved after saving.
 
 Click **시작 가이드 · 점검 → 권장 엔진 준비** for translation and OCR setup, or **OCR 설치 · 준비** in the guide for OCR only.
 After approval, missing uv, private Python, CUDA libraries and the official model are installed automatically, then the OCR model is prepared. Progress and errors stay in the guide. Existing runtimes are reused.

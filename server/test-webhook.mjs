@@ -19,7 +19,10 @@ try {
   const root = await fetch(`http://127.0.0.1:${port}/`);
   const rootText = await root.text();
   if (!root.ok || !rootText.includes('Valtrans')) throw new Error('static site failed');
-  for (const required of ['PaddleOCR-VL', 'NVIDIA GPU', '로컬 전용', 'id="setup"', 'v0.2.3-beta']) {
+  const project = await readFile(new URL('../Valtrans.csproj', import.meta.url), 'utf8');
+  const version = project.match(/<Version>([^<]+)<\/Version>/)?.[1];
+  if (!version) throw new Error('project version missing');
+  for (const required of ['Fast/Hybrid OCR', 'NVIDIA GPU', '로컬 전용', 'id="setup"', `v${version}`]) {
     if (!rootText.includes(required)) throw new Error(`site product information missing: ${required}`);
   }
   if (rootText.includes('외부 API는 선택 사항') || rootText.includes('v0.1.1-beta')) throw new Error('stale site information');
@@ -53,5 +56,8 @@ try {
   const health = await fetch(`http://127.0.0.1:${port}/health`);
   if (!health.ok) throw new Error('health failed');
   console.log('PASS: static site, legal pages, signed test webhook, payment idempotency, private-field omission, admin protection, and health endpoint');
-} finally { child.kill(); }
-await rm(dataDir, { recursive: true, force: true });
+} finally {
+  const closed = new Promise(resolve => child.once('close', resolve));
+  if (child.exitCode === null) { child.kill(); await closed; }
+  await rm(dataDir, { recursive: true, force: true });
+}

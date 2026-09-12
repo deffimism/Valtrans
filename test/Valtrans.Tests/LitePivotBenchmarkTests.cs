@@ -16,7 +16,7 @@ public sealed class LitePivotBenchmarkTests
     [Fact]
     public async Task Measure_jp_ko_pivot_vs_direct_en_ko_when_lite_ready()
     {
-        var lite = new ValtransLiteService();
+        using var lite = new ValtransLiteService();
         if (!lite.GetStatus().Ready)
         {
             _output.WriteLine("SKIP: Valtrans Lite is not installed on this machine.");

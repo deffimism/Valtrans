@@ -143,7 +143,7 @@ public partial class MainWindow : System.Windows.Window
             }
             if (_settings.TranslationProvider is "Ollama" or "Hybrid")
                 await WarmUpLocalAiAsync(showGlobalStatus: false);
-            if (_settings.TranslationProvider is "Lite" or "Hybrid")
+            if (TranslationEnginePolicy.RequiresLite(_settings.TranslationProvider))
                 RefreshLiteStatus();
             await RefreshQuickStartGuideAsync();
         }
@@ -262,16 +262,11 @@ public partial class MainWindow : System.Windows.Window
             switch (_settings.TranslationProvider)
             {
                 case "Hybrid":
-                    if (liteStatus.Ready && localStatus.Ready)
-                        lines.Add("✓ 스마트 복합 · Lite + 로컬 AI 준비됨");
-                    else if (liteStatus.Ready || localStatus.Ready)
-                    {
-                        lines.Add($"△ 스마트 복합 일부 준비 · {(liteStatus.Ready ? "Lite" : LocalAiService.GetModel(_settings.LocalAiModel).DisplayName)} 사용 가능");
-                        repairable++;
-                    }
+                    if (localStatus.Ready)
+                        lines.Add("✓ 스마트 복합 · 사전 + 선택한 로컬 AI 준비됨");
                     else
                     {
-                        lines.Add("✕ 스마트 복합 엔진 미설치 · Lite와 로컬 AI 준비 필요");
+                        lines.Add("✕ 선택한 로컬 AI 준비 필요 · Lite는 대체 엔진이 아닙니다");
                         blocking++;
                         repairable++;
                     }
@@ -365,16 +360,11 @@ public partial class MainWindow : System.Windows.Window
             var report = await _translator.TestCompatibilityAsync(_settings, timeout.Token);
             var failedEngines = report.Results.Where(result => !result.Success)
                 .Select(result => result.Engine).Distinct().ToArray();
-            var localAiPassed = _settings.TranslationProvider == "Hybrid" &&
-                report.Results.Any(result => result.Engine != "Valtrans Lite") &&
-                report.Results.Where(result => result.Engine != "Valtrans Lite").All(result => result.Success);
             var summary = report.Success
                 ? report.Adjusted == 0
                     ? $"정상 · {report.Passed}/{report.Total} · 기본 보존 검사 통과 · 평균 {report.AverageDurationMs:N0}ms"
                     : $"사용 가능 · {report.Passed}/{report.Total} · {report.Adjusted}건 보존·콜아웃 처리 적용 · 평균 {report.AverageDurationMs:N0}ms"
-                : localAiPassed
-                    ? $"AI 사용 가능 · Lite 대체 품질 확인 필요 · {report.Passed}/{report.Total} 통과"
-                    : $"확인 필요 · {report.Passed}/{report.Total} 성공 · {string.Join(", ", failedEngines)}";
+                : $"확인 필요 · {report.Passed}/{report.Total} 성공 · {string.Join(", ", failedEngines)}";
             var details = string.Join(Environment.NewLine, report.Results.Select(result =>
                 $"{(result.Success ? "✓" : "✕")} {result.Engine} · {result.Probe} · {result.Detail} · {result.DurationMs:N0}ms"));
             RegressionStatusText.Text = summary + Environment.NewLine + details;
@@ -497,7 +487,7 @@ public partial class MainWindow : System.Windows.Window
     private async Task RepairSelectedTranslationEngineAsync()
     {
         var provider = _settings.TranslationProvider;
-        if (provider is "Hybrid" or "Lite")
+        if (TranslationEnginePolicy.RequiresLite(provider))
         {
             var liteStatus = _lite.GetStatus();
             if (!liteStatus.Ready)
@@ -631,26 +621,10 @@ public partial class MainWindow : System.Windows.Window
         ApplySettingsToUi();
         _settingsService.Save(_settings);
 
-        var liteReady = _lite.GetStatus().Ready;
         var localStatus = await _localAi.GetStatusAsync(LocalAiService.DefaultModelName);
         var localReady = localStatus.Ready;
         try
         {
-            if (!liteReady)
-            {
-                LiteInstallProgress.Visibility = Visibility.Visible;
-                var liteProgress = new Progress<LiteProgress>(update =>
-                {
-                    LiteInstallProgress.Value = update.Percent;
-                    GuideNextActionText.Text = $"1/3 · Valtrans Lite 준비 중 · {update.Message}";
-                    SetLiteStatus(update.Message, false);
-                    SetStatus("권장 구성 준비 중", update.Message);
-                });
-                var liteResult = await _lite.InstallAndPrepareAsync(liteProgress);
-                liteReady = liteResult.Success;
-                SetLiteStatus(liteResult.Message, liteResult.Success);
-            }
-
             if (!localReady)
             {
                 LocalInstallProgress.Visibility = Visibility.Visible;
@@ -658,7 +632,7 @@ public partial class MainWindow : System.Windows.Window
                 var localProgress = new Progress<LocalAiProgress>(update =>
                 {
                     LocalInstallProgress.Value = update.Percent;
-                    GuideNextActionText.Text = $"2/3 · Hy-MT2 준비 중 · {update.Message}";
+                    GuideNextActionText.Text = $"1/2 · Hy-MT2 준비 중 · {update.Message}";
                     SetLocalStatus(update.Message, false);
                     SetStatus("권장 구성 준비 중", update.Message);
                 });
@@ -669,15 +643,15 @@ public partial class MainWindow : System.Windows.Window
 
             if (localReady)
                 localReady = await WarmUpLocalAiAsync(showGlobalStatus: false);
-            GuideNextActionText.Text = "3/3 · PaddleOCR-VL 설치·준비 중";
+            GuideNextActionText.Text = "2/2 · PaddleOCR-VL 설치·준비 중";
             var ocrReady = await PreparePaddleSetupAsync();
             _settingsService.Save(_settings);
-            SetStatus(liteReady && localReady && ocrReady ? "권장 엔진 준비 완료" : "일부 엔진 준비됨",
-                liteReady && localReady && ocrReady
+            SetStatus(localReady && ocrReady ? "권장 엔진 준비 완료" : "일부 엔진 준비됨",
+                localReady && ocrReady
                     ? "번역과 Paddle OCR 준비 완료 · 게임 실행 후 OCR 시작을 누르세요."
                     : !ocrReady ? $"OCR 준비 필요 · {_paddleSetupIssue}"
                     : "준비되지 않은 번역 엔진의 안내를 확인해 주세요.",
-                !liteReady && !localReady);
+                !localReady || !ocrReady);
         }
         catch (Exception ex)
         {
@@ -709,14 +683,15 @@ public partial class MainWindow : System.Windows.Window
                 providerRecommended ? "✓ 권장값 사용 중" : $"현재 · {ProviderDisplayName(provider)}", providerRecommended);
 
             var liteStatus = _lite.GetStatus();
-            var localStatus = await _localAi.GetStatusAsync(LocalAiService.DefaultModelName);
+            var localStatus = await _localAi.GetStatusAsync(_settings.LocalAiModel);
             var liteReady = liteStatus.Ready;
             var localReady = localStatus.Ready;
+            var translationReady = TranslationEnginePolicy.IsReady(provider, liteReady, localReady);
+            GuideModelSizeText.Text = provider == "Lite" ? "CPU 번역 · 별도 선택 엔진"
+                : $"모델 다운로드 {LocalAiService.GetModel(_settings.LocalAiModel).SizeLabel} · 번역 시 외부 전송 없음";
             SetGuideState(GuideModelStateText,
-                liteReady && localReady ? "✓ Lite + Hy-MT2 준비됨"
-                : liteReady ? "△ Lite만 준비됨"
-                : localReady ? "△ Hy-MT2만 준비됨"
-                : "준비 필요 · 버튼 한 번", liteReady && localReady);
+                translationReady ? $"✓ {(provider == "Lite" ? "Valtrans Lite" : LocalAiService.GetModel(_settings.LocalAiModel).DisplayName)} 준비됨"
+                : "선택한 번역 엔진 준비 필요", translationReady);
             var regionReady = _settings.CaptureRegion.IsValid;
             SetGuideState(GuideRegionStateText,
                 regionReady ? $"✓ {GameDisplayName(_activeRegionGame)} 영역 저장됨" : "VALORANT 실행 후 추천 영역", regionReady);
@@ -725,6 +700,13 @@ public partial class MainWindow : System.Windows.Window
             var paddle = engine == "Paddle";
             var fast = engine == "Fast";
             var hybrid = engine == "Hybrid";
+            GuideOcrEngineText.Text = engine switch
+            {
+                "Paddle" => "PaddleOCR-VL",
+                "Fast" => "Fast OCR · PP-OCRv5",
+                "Hybrid" => "Hybrid OCR · Fast + Paddle VL",
+                _ => "Windows OCR"
+            };
             var selectedLanguages = IsLoaded ? ReadOcrLanguages(updateUiWhenEmpty: false) : _settings.OcrLanguages;
             var languageStates = _languagePacks.GetSupportedLanguageStatus();
             var missingLanguages = paddle || fast || hybrid ? Array.Empty<string>()
@@ -744,10 +726,8 @@ public partial class MainWindow : System.Windows.Window
 
             GuideNextActionText.Text = (paddle || fast || hybrid) && !ocrReady && !string.IsNullOrEmpty(_paddleSetupIssue)
                 ? _paddleSetupIssue
-                : !providerRecommended
-                ? "‘권장값 적용’을 눌러 스마트 복합 구성을 선택하세요."
-                : !liteReady || !localReady
-                    ? "‘권장 엔진 준비’로 Lite · Hy-MT2 · Paddle OCR을 차례대로 준비하세요."
+                : !translationReady
+                    ? "‘자동 복구’ 또는 번역 엔진의 설치 버튼으로 선택한 엔진을 준비하세요."
                     : !ocrReady
                         ? paddle || fast || hybrid
                             ? !string.IsNullOrEmpty(_paddleSetupIssue) ? _paddleSetupIssue
@@ -764,8 +744,10 @@ public partial class MainWindow : System.Windows.Window
                                 ? WindowsOcrAdvisory.JapaneseChatLimitation
                                 : "준비 완료 · 보내기는 단축키, 받기는 ‘OCR 시작’을 사용하세요.";
 
-            RecommendedPrepareButton.Content = liteReady && localReady && ocrReady ? "권장 엔진 준비됨" : "권장 엔진 준비";
-            RecommendedPrepareButton.IsEnabled = !_recommendedSetupBusy && !_paddleSetupBusy && (!liteReady || !localReady || !ocrReady);
+            var recommendedReady = providerRecommended && localReady && paddle && ocrReady &&
+                _settings.LocalAiModel == LocalAiService.DefaultModelName;
+            RecommendedPrepareButton.Content = recommendedReady ? "권장 엔진 준비됨" : "권장 구성 설치·적용";
+            RecommendedPrepareButton.IsEnabled = !_recommendedSetupBusy && !_paddleSetupBusy && !recommendedReady;
             GuideOcrPrepareButton.IsEnabled = !_recommendedSetupBusy && !_paddleSetupBusy && _paddleOperation is null;
             GuideOcrPrepareButton.Content = paddle || fast || hybrid
                 ? (ocrReady ? "OCR 준비 확인" : engine switch
@@ -775,13 +757,7 @@ public partial class MainWindow : System.Windows.Window
                     _ => "OCR 설치 · 준비"
                 })
                 : "언어팩 설치";
-            var engineNeedsRepair = provider switch
-            {
-                "Hybrid" => !liteReady || !localReady,
-                "Lite" => !liteReady,
-                "Ollama" => !localReady,
-                _ => false
-            };
+            var engineNeedsRepair = !translationReady;
             AutoRepairButton.IsEnabled = !_recommendedSetupBusy && !_diagnosticsBusy &&
                                          (engineNeedsRepair || missingLanguages.Length > 0 || !regionReady ||
                                           !GlobalHotkeyService.TryValidate(_settings.Hotkey, out _));
@@ -834,8 +810,12 @@ public partial class MainWindow : System.Windows.Window
 
             SetStatus("번역 중", Shorten(source, 60));
             _lastHybridRoute = "";
-            var translated = await _translator.TranslateAsync(source, _settings.SendTargetLanguage, _settings);
-            await _keyboard.ReplaceChatAsync(gameWindow, translated);
+            var translationSettings = _settings.SnapshotForTranslation();
+            var translated = await _translator.TranslateAsync(source, translationSettings.SendTargetLanguage, translationSettings);
+            if (TranslationCacheService.BuildKey(source, translationSettings.SendTargetLanguage, "Send", translationSettings) !=
+                TranslationCacheService.BuildKey(source, _settings.SendTargetLanguage, "Send", _settings))
+                throw new InvalidOperationException("번역 중 설정이 바뀌어 이전 결과로 교체하지 않았습니다.");
+            await _keyboard.ReplaceChatAsync(gameWindow, source, translated);
             SetStatus(_settings.TranslationProvider == "Hybrid" && _lastHybridRoute.Length > 0
                 ? $"교체 완료 · {_lastHybridRoute}"
                 : "교체 완료", translated);
@@ -909,7 +889,7 @@ public partial class MainWindow : System.Windows.Window
                 _settings.AutoSwitchGameProfile ? "Auto" : _settings.Game, out _);
             if (gameActive || _ocrCancellation is not null)
                 await MaintainLiteMemoryAsync(forceWarmup: false);
-            else if ((_settings.TranslationProvider is "Lite" or "Hybrid") && _lite.GetStatus().Running && IsVisible)
+            else if (TranslationEnginePolicy.RequiresLite(_settings.TranslationProvider) && _lite.GetStatus().Running && IsVisible)
             {
                 await _lite.RefreshRuntimeStatusAsync();
                 RefreshLiteStatus();
@@ -923,7 +903,7 @@ public partial class MainWindow : System.Windows.Window
 
     private async Task MaintainLiteMemoryAsync(bool forceWarmup)
     {
-        if (_liteMaintenanceBusy || _settings.TranslationProvider is not ("Lite" or "Hybrid")) return;
+        if (_liteMaintenanceBusy || !TranslationEnginePolicy.RequiresLite(_settings.TranslationProvider)) return;
         var status = _lite.GetStatus();
         if (!status.Ready) return;
         _liteMaintenanceBusy = true;
@@ -1100,19 +1080,6 @@ public partial class MainWindow : System.Windows.Window
             return await WarmUpLiteIfReadyAsync();
         }
 
-        if (_settings.TranslationProvider == "Hybrid")
-        {
-            var liteStatus = _lite.GetStatus();
-            SetLiteStatus(liteStatus.Message, liteStatus.Ready);
-            var liteReady = liteStatus.Ready && await WarmUpLiteIfReadyAsync(showGlobalStatus: false);
-            var localStatus = await _localAi.GetStatusAsync(_settings.LocalAiModel);
-            var qwenReady = localStatus.ModelLoaded || localStatus.Ready &&
-                await WarmUpLocalAiAsync(showGlobalStatus: false);
-            if (liteReady || qwenReady) return true;
-            SetStatus("복합 엔진 준비 필요", "Valtrans Lite 또는 선택한 로컬 모델 중 하나 이상을 먼저 준비해 주세요.", true);
-            return false;
-        }
-
         var status = await _localAi.GetStatusAsync(_settings.LocalAiModel);
         if (status.ModelLoaded) return true;
         if (status.Ready) return await WarmUpLocalAiAsync();
@@ -1129,7 +1096,7 @@ public partial class MainWindow : System.Windows.Window
         ApplyProviderPanels();
         if (IsLoaded && (provider is "Ollama" or "Hybrid"))
             _ = WarmUpLocalAiAsync(showGlobalStatus: false);
-        if (IsLoaded && (provider is "Lite" or "Hybrid"))
+        if (IsLoaded && TranslationEnginePolicy.RequiresLite(provider))
             RefreshLiteStatus();
         UpdateTranslationTestPresentation();
         _ = RefreshQuickStartGuideAsync();
@@ -1140,7 +1107,7 @@ public partial class MainWindow : System.Windows.Window
         if (HybridPanel is null || LitePanel is null || LocalAiPanel is null) return;
         var provider = _settings.TranslationProvider;
         HybridPanel.Visibility = provider == "Hybrid" ? Visibility.Visible : Visibility.Collapsed;
-        LitePanel.Visibility = provider is "Lite" or "Hybrid" ? Visibility.Visible : Visibility.Collapsed;
+        LitePanel.Visibility = TranslationEnginePolicy.RequiresLite(provider) ? Visibility.Visible : Visibility.Collapsed;
         LocalAiPanel.Visibility = provider is "Ollama" or "Hybrid" ? Visibility.Visible : Visibility.Collapsed;
         CredentialNoticeText.Text = "채팅은 PC 안에서만 번역합니다. 최초 모델 다운로드에는 인터넷이 필요합니다.";
         UpdateTranslationTestPresentation();
@@ -1290,7 +1257,7 @@ public partial class MainWindow : System.Windows.Window
         if (TestCurrentEngineText is null) return;
         var engine = _settings.TranslationProvider switch
         {
-            "Hybrid" => $"스마트 복합 · {LocalAiService.GetModel(_settings.LocalAiModel).DisplayName} + Lite",
+            "Hybrid" => $"스마트 복합 · 사전 + {LocalAiService.GetModel(_settings.LocalAiModel).DisplayName}",
             "Ollama" => LocalAiService.GetModel(_settings.LocalAiModel).DisplayName,
             _ => TranslationProviderDisplayName(_settings.TranslationProvider)
         };
@@ -1956,7 +1923,7 @@ public partial class MainWindow : System.Windows.Window
         var runtime = string.IsNullOrWhiteSpace(_settings.FastOcrRuntime)
             ? FastOcrService.FindRuntime()
             : _settings.FastOcrRuntime;
-        var result = await _fastOcr.ReadAsync(captured.Png, runtime, token);
+        var result = await _fastOcr.ReadAsync(captured.Png, runtime, token, _settings.OcrLanguages, _settings.Game);
         return result with
         {
             FrameHash = captured.FrameHash,
@@ -2002,7 +1969,6 @@ public partial class MainWindow : System.Windows.Window
     private async Task<OcrReadResult> ReadHybridRegionAsync(System.Drawing.Rectangle region, CancellationToken token,
         CapturedFramePng? captured = null)
     {
-        var watch = Stopwatch.StartNew();
         captured ??= await _ocr.CaptureFramePngAsync(region);
         token.ThrowIfCancellationRequested();
         var fastRuntime = string.IsNullOrWhiteSpace(_settings.FastOcrRuntime)
@@ -2012,6 +1978,7 @@ public partial class MainWindow : System.Windows.Window
             ? PaddleOcrService.FindRuntime()
             : _settings.PaddleOcrRuntime;
         var options = HybridOcrOptionsForCurrentMode();
+        var captureMs = captured.CaptureDurationMs;
         byte[]? latestLinePng = null;
         if (options.AllowLatestLineRetry)
         {
@@ -2019,18 +1986,26 @@ public partial class MainWindow : System.Windows.Window
             if (region != latestRegion)
             {
                 var latestCaptured = await _ocr.CaptureFramePngAsync(latestRegion);
+                captureMs += latestCaptured.CaptureDurationMs;
                 latestLinePng = latestCaptured.Png;
             }
         }
         var read = await _hybridOcr.ReadDetailedAsync(captured.Png, latestLinePng, fastRuntime, paddleRuntime,
             _glossary, _settings, options, token);
         RecordOcrStage($"Hybrid OCR · {DescribeHybridStage(read.Stage)}");
+        if (read.Timings is { } timings)
+            _pipelineLog.Record("ocr", "hybrid_stages", new Dictionary<string, object?>
+            {
+                ["fastMs"] = Math.Round(timings.FastMs, 1), ["retryMs"] = Math.Round(timings.RetryMs, 1),
+                ["vlMs"] = Math.Round(timings.VlMs, 1), ["totalMs"] = Math.Round(timings.TotalMs, 1),
+                ["selected"] = read.Stage
+            });
         var result = read.Result;
         return result with
         {
             FrameHash = captured.FrameHash,
-            CaptureDurationMs = captured.CaptureDurationMs,
-            TotalDurationMs = watch.Elapsed.TotalMilliseconds
+            CaptureDurationMs = captureMs,
+            TotalDurationMs = captureMs + result.TotalDurationMs
         };
     }
 
@@ -2399,6 +2374,7 @@ public partial class MainWindow : System.Windows.Window
                     var useFullRegion = ShouldRunFullChatOcr();
                     var captureRegion = useFullRegion ? region : latestRegion;
                     var captured = await _ocr.CaptureFramePngAsync(captureRegion);
+                    var testSnapshot = SaveTestOcrInput(captured.Png, captureRegion, captured.FrameHash);
                     candidateHash = captured.FrameHash;
                     var engineLabel = hybrid ? "Hybrid OCR" : fast ? "Fast OCR" : "Paddle OCR";
                     if (!TestModeContext.Enabled &&
@@ -2419,6 +2395,7 @@ public partial class MainWindow : System.Windows.Window
                         : fast
                             ? await ReadFastRegionAsync(captureRegion, cancellationToken, captured)
                             : await ReadPaddleRegionAsync(captureRegion, cancellationToken, captured);
+                    SaveTestOcrResult(testSnapshot, ocrResult);
                     lastRecognitionUtc = DateTime.UtcNow;
                 }
                 else if (_settings.DualRegionOcr)
@@ -2504,7 +2481,7 @@ public partial class MainWindow : System.Windows.Window
                     await Task.Delay(Math.Max(150, _settings.OcrIntervalMs / 3), cancellationToken);
                     continue;
                 }
-                if (!paddle)
+                if (!paddle && !fast && !hybrid)
                 {
                     UpdateOcrEnhancementProfile(ocrResult);
                     MonitorOcrProfileQuality(ocrResult);
@@ -2522,7 +2499,15 @@ public partial class MainWindow : System.Windows.Window
                     var consensusWatch = Stopwatch.StartNew();
                     await Task.Delay(GetAdaptiveConsensusDelay(), cancellationToken);
                     OcrReadResult confirmation;
-                    if (dualRead is not null)
+                    if (fast || hybrid)
+                    {
+                        // Confirmation must use the selected recognizer. Windows language
+                        // packs and its quality-score scale do not apply to Fast/Hybrid.
+                        confirmation = await ReadRegionForCurrentEngineAsync(region, cancellationToken);
+                        if (_testRunReport is not null)
+                            _testRunReport.ConsensusRecognizers.Add(_settings.OcrEngine);
+                    }
+                    else if (dualRead is not null)
                     {
                         var dualConfirmation = await _ocr.ReadDualAsync(region, latestRegion, _settings.OcrLanguages,
                             null, null, true, _settings.OcrAutoEnhance,
@@ -2956,6 +2941,7 @@ public partial class MainWindow : System.Windows.Window
     private async Task ProcessIncomingLineAsync(string text, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var translationSettings = Dispatcher.Invoke(() => _settings.SnapshotForTranslation());
         _activeTraceInput = text;
         _activeTraceRoute = null;
         _activeTraceValidationAdjusted = false;
@@ -2965,21 +2951,37 @@ public partial class MainWindow : System.Windows.Window
         try
         {
             _lastHybridRoute = "";
-            var classification = _messageClassifier.Classify(text, _settings);
-            var result = await TranslateWithSafeBriefingDeadlineAsync(new[] { text }, text, cancellationToken);
+            var classification = _messageClassifier.Classify(text, translationSettings);
+            var result = await TranslateWithSafeBriefingDeadlineAsync(new[] { text }, text, translationSettings, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             var validation = CriticalFactValidator.Validate(text, result.Text, classification.Type);
             if (!validation.Passed && !result.UsedSafeBriefing)
             {
-                var retryText = await TranslateWithRetryAsync(text, preserveLines: false, cancellationToken);
+                var retryText = await TranslateWithRetryAsync(text, preserveLines: false, translationSettings, cancellationToken);
                 validation = CriticalFactValidator.Validate(text, retryText, classification.Type);
                 result = new TranslationBatchResult(retryText, false);
             }
             if (validation.Passed)
-                _translationCache.Set(text, ResolveTranslationTargetLanguage(text), classification.Type, _settings, result.Text);
+                _translationCache.Set(text, ResolveTranslationTargetLanguage(text, translationSettings), classification.Type, translationSettings, result.Text);
+            else
+            {
+                CompleteMessageTrace(text, result.Text, result.UsedSafeBriefing, translationWatch.Elapsed.TotalMilliseconds,
+                    "validation_failed", "validation", validation.Code + " · " + validation.Detail);
+                Dispatcher.Invoke(() =>
+                {
+                    if (cancellationToken.IsCancellationRequested) return;
+                    _overlay?.AddSkipNotice("번역 확인 필요", "원문의 정보가 달라져 번역을 표시하지 않았습니다.",
+                        displaySeconds: _settings.OverlayDisplaySeconds);
+                    SetStatus("번역 확인 필요", validation.Code + " · 오역 의심 결과를 표시하지 않았습니다.");
+                });
+                RecordOcrStage("번역 생략 · 의미 검사 실패");
+                return;
+            }
             Dispatcher.Invoke(() =>
             {
                 if (cancellationToken.IsCancellationRequested) return;
+                if (TranslationCacheService.BuildKey(text, translationSettings.OverlayTargetLanguage, classification.Type, translationSettings) !=
+                    TranslationCacheService.BuildKey(text, _settings.OverlayTargetLanguage, classification.Type, _settings)) return;
                 _overlay?.AddTranslation(ShortenLines(text, 180), ShortenLines(result.Text, 240),
                     _settings.OverlayDisplaySeconds);
                 SetStatus(result.UsedSafeBriefing ? "즉시 안전 브리핑 표시" : "새 채팅 번역됨", Shorten(result.Text, 75));
@@ -3035,19 +3037,19 @@ public partial class MainWindow : System.Windows.Window
     }
 
     private async Task<TranslationBatchResult> TranslateWithSafeBriefingDeadlineAsync(string[] lines, string text,
-        CancellationToken cancellationToken)
+        AppSettings translationSettings, CancellationToken cancellationToken)
     {
         var safeLines = new List<string>(lines.Length);
         foreach (var line in lines)
         {
-            if (!TranslationFactGuard.TryBuildSafeBriefing(line, ResolveTranslationTargetLanguage(line), _settings,
+            if (!TranslationFactGuard.TryBuildSafeBriefing(line, ResolveTranslationTargetLanguage(line, translationSettings), translationSettings,
                     _glossary, out var safeLine))
-                return new TranslationBatchResult(await TranslateBatchAsync(lines, text, cancellationToken), false);
+                return new TranslationBatchResult(await TranslateBatchAsync(lines, text, translationSettings, cancellationToken), false);
             safeLines.Add(safeLine);
         }
 
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var translationTask = TranslateBatchAsync(lines, text, deadline.Token);
+        var translationTask = TranslateBatchAsync(lines, text, translationSettings, deadline.Token);
         var completed = await Task.WhenAny(translationTask, Task.Delay(TimeSpan.FromMilliseconds(2400), cancellationToken));
         if (completed == translationTask)
             return new TranslationBatchResult(await translationTask, false);
@@ -3067,23 +3069,23 @@ public partial class MainWindow : System.Windows.Window
         return new TranslationBatchResult(string.Join(Environment.NewLine, safeLines), true);
     }
 
-    private async Task<string> TranslateBatchAsync(string[] lines, string text, CancellationToken cancellationToken)
+    private async Task<string> TranslateBatchAsync(string[] lines, string text, AppSettings translationSettings, CancellationToken cancellationToken)
     {
         var sourceLanguages = lines.Select(line => DetectTextLanguage(line, "EN"))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (sourceLanguages.Length <= 1)
-            return await TranslateWithRetryAsync(text, preserveLines: true, cancellationToken);
+            return await TranslateWithRetryAsync(text, preserveLines: true, translationSettings, cancellationToken);
 
         var translatedLines = new List<string>(lines.Length);
         foreach (var line in lines)
-            translatedLines.Add(await TranslateWithRetryAsync(line, preserveLines: false, cancellationToken));
+            translatedLines.Add(await TranslateWithRetryAsync(line, preserveLines: false, translationSettings, cancellationToken));
         return string.Join(Environment.NewLine, translatedLines);
     }
 
-    private string ResolveTranslationTargetLanguage(string text)
+    private string ResolveTranslationTargetLanguage(string text, AppSettings translationSettings)
     {
-        if (!TestModeContext.Enabled) return _settings.OverlayTargetLanguage;
+        if (!TestModeContext.Enabled) return translationSettings.OverlayTargetLanguage;
         var source = DetectTextLanguage(text, "EN");
         if (source.Equals("KO", StringComparison.OrdinalIgnoreCase)) return "EN";
         if (source.Equals("JA", StringComparison.OrdinalIgnoreCase)) return "KO";
@@ -3091,18 +3093,18 @@ public partial class MainWindow : System.Windows.Window
     }
 
     private async Task<string> TranslateWithRetryAsync(string text, bool preserveLines,
-        CancellationToken cancellationToken)
+        AppSettings translationSettings, CancellationToken cancellationToken)
     {
-        var targetLanguage = ResolveTranslationTargetLanguage(text);
-        var style = _messageClassifier.Classify(text, _settings).Type;
-        if (_translationCache.TryGet(text, targetLanguage, style, _settings, out var cached))
+        var targetLanguage = ResolveTranslationTargetLanguage(text, translationSettings);
+        var style = _messageClassifier.Classify(text, translationSettings).Type;
+        if (_translationCache.TryGet(text, targetLanguage, style, translationSettings, out var cached))
             return cached;
         Exception? lastError = null;
         for (var attempt = 0; attempt < 2; attempt++)
         {
             try
             {
-                return await _translator.TranslateAsync(text, targetLanguage, _settings,
+                return await _translator.TranslateAsync(text, targetLanguage, translationSettings,
                     preserveLines, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
@@ -3261,7 +3263,10 @@ public partial class MainWindow : System.Windows.Window
         if (_adaptiveOcrMode == "Balanced") return true;
         var normalized = NormalizeOcr(result.Text);
         var critical = CriticalCalloutSignature(normalized).Length > 0 || HasProtectedBriefingTerms(normalized);
-        return _adaptiveOcrMode == "Efficient" ? critical || result.QualityScore < 64 : critical;
+        var lowQuality = _settings.OcrEngine is "Fast" or "Hybrid"
+            ? result.QualityScore < 0.64
+            : result.QualityScore < 64;
+        return _adaptiveOcrMode == "Efficient" ? critical || lowQuality : critical;
     }
 
     private static bool HasProtectedBriefingTerms(string text)
@@ -4058,19 +4063,19 @@ public partial class MainWindow : System.Windows.Window
     }
 
     private bool ShouldRunFullChatOcr() =>
-        (TestModeContext.Enabled && _ocrBaselinePending) ||
+        (TestModeContext.Enabled && (_ocrBaselinePending || _testScenario?.FullRegionConsensus == true)) ||
         (!TestModeContext.Enabled && (IsFullChatInputMode() || _ocrBaselinePending));
 
-    // Fast and PaddleOCR-VL share one GPU. Loading both inside an E2E run stalls the arena,
-    // so test mode stops after Fast and reports the unverified stage instead of hanging.
+    // E2E must exercise the same retry and VL fallback stages as production.
     private static HybridOcrOptions HybridOcrOptionsForCurrentMode() =>
-        TestModeContext.Enabled ? HybridOcrOptions.FastOnly : HybridOcrOptions.Production;
+        HybridOcrOptions.Production;
 
     private static string DescribeHybridStage(string stage) => stage switch
     {
         HybridOcrService.StageFastFullRegion => "Fast 채택 · 전체 영역",
         HybridOcrService.StageFastLatestLine => "Fast 채택 · 최신 1줄 재판독",
         HybridOcrService.StageVlFallback => "VL 보정 사용 · Fast 신뢰도 낮음",
+        HybridOcrService.StageFastAfterVl => "VL 비교 완료 · Fast 결과 유지",
         HybridOcrService.StageFastUnverified => "Fast 결과 그대로 · VL 보정 생략",
         _ => stage
     };

@@ -23,7 +23,14 @@ def send(value):
 def build_ocr():
     from paddleocr import PaddleOCR
 
-    kwargs = {"use_textline_orientation": True}
+    # Game chat crops are upright screen pixels, not scanned/rotated documents.
+    # Disable document dewarping and rotation models explicitly: their defaults
+    # add inference stages and can distort small anti-aliased chat glyphs.
+    kwargs = {
+        "use_doc_orientation_classify": False,
+        "use_doc_unwarping": False,
+        "use_textline_orientation": False,
+    }
     try:
         return PaddleOCR(ocr_version="PP-OCRv5", lang="ch", **kwargs)
     except TypeError:
@@ -78,8 +85,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime", required=True)
     args = parser.parse_args()
+    from chat_ocr import ChatRecognizer
     with contextlib.redirect_stdout(sys.stderr):
-        ocr = build_ocr()
+        chat = ChatRecognizer()
+        chat.prepare(['EN', 'JP', 'KO'])
+    ocr = None
     send({"ready": True, "engine": "PP-OCRv5", "runtime": args.runtime})
     while True:
         line = sys.stdin.readline(12_000_001)
@@ -94,11 +104,29 @@ def main():
         try:
             start = time.perf_counter()
             png = base64.b64decode(request["png"], validate=True)
-            text, confidence = recognize(ocr, png)
+            from PIL import Image
+            with Image.open(io.BytesIO(png)) as original:
+                if original.width < 20 or original.height < 20 or original.width * original.height > 4_000_000:
+                    raise ValueError('Invalid OCR image dimensions')
+                frame = original.convert('RGB')
+            languages = request.get('languages') or ['EN', 'JP', 'KO']
+            languages = [language for language in languages if language in ('EN', 'JP', 'KO', 'ZH')]
+            with contextlib.redirect_stdout(sys.stderr):
+                rows = chat.recognize(frame, languages) if request.get('game') == 'VALORANT' else None
+                if rows is None:
+                    if ocr is None:
+                        ocr = build_ocr()
+                    text, confidence = recognize(ocr, png)
+                else:
+                    text = '\n'.join(row['text'] for row in rows)
+                    confidence = min((row['confidence'] for row in rows), default=0.0)
             send({
                 "id": request_id,
                 "text": text,
                 "confidence": confidence,
+                "lines": rows,
+                "imageWidth": frame.width,
+                "stage": 'chat-rows' if rows is not None else 'document-fallback',
                 "finished": True,
                 "milliseconds": round((time.perf_counter() - start) * 1000, 1)
             })

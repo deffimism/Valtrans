@@ -8,6 +8,7 @@ $root = Resolve-Path "$PSScriptRoot/.."
 switch ($Profile) {
     'Unit' {
         dotnet test "$root/test/Valtrans.Tests/Valtrans.Tests.csproj" -c Release
+        if ($LASTEXITCODE -ne 0) { throw "Unit tests failed (exit $LASTEXITCODE)" }
     }
     'Smoke' {
         & "$PSScriptRoot/Test-MessageTrace.ps1"
@@ -29,6 +30,7 @@ switch ($Profile) {
     }
     'Full' {
         dotnet test "$root/test/Valtrans.Tests/Valtrans.Tests.csproj" -c Release
+        if ($LASTEXITCODE -ne 0) { throw "Unit tests failed (exit $LASTEXITCODE)" }
         & "$PSScriptRoot/Test-MessageTrace.ps1"
         & "$PSScriptRoot/Run-E2ESmoke.ps1" -NoFocusArena
         & "$PSScriptRoot/Run-ArenaFuzz.ps1"

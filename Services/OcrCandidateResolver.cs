@@ -1,4 +1,5 @@
 using Valtrans.Models;
+using System.Text.RegularExpressions;
 
 namespace Valtrans.Services;
 
@@ -20,6 +21,8 @@ public static class OcrCandidateResolver
     {
         var fastNorm = Normalize(fast.Text);
         var vlNorm = Normalize(vl.Text);
+        if (vlNorm.Length == 0) return fast;
+        if (fastNorm.Length == 0) return vl;
         if (string.Equals(fastNorm, vlNorm, StringComparison.OrdinalIgnoreCase))
             return fast with { QualityScore = Math.Max(fast.QualityScore, vl.QualityScore) };
         if (vlNorm.Length > fastNorm.Length + 2 &&
@@ -28,16 +31,21 @@ public static class OcrCandidateResolver
         if (fastNorm.Length > vlNorm.Length + 2 &&
             fastNorm.Contains(vlNorm, StringComparison.OrdinalIgnoreCase))
             return fast;
-        var fastScore = Score(fast, glossary, settings);
-        var vlScore = Score(vl, glossary, settings);
+        // VL supplies no calibrated confidence. Comparing its default numeric zero
+        // against Fast's score systematically discarded the second reading. When
+        // either score is unavailable, compare content only, not made-up confidence.
+        var comparableConfidence = fast.QualityScoreAvailable && vl.QualityScoreAvailable;
+        var fastScore = Score(fast, glossary, settings, comparableConfidence);
+        var vlScore = Score(vl, glossary, settings, comparableConfidence);
         if (vlScore > fastScore + 0.05) return vl;
         if (fastScore > vlScore + 0.05) return fast;
-        return vl.QualityScore >= fast.QualityScore ? vl : fast;
+        return !comparableConfidence || vl.QualityScore >= fast.QualityScore ? vl : fast;
     }
 
     public static bool MeetsHybridFastAccept(OcrReadResult candidate, GlossaryService glossary, AppSettings settings)
     {
-        if (candidate.QualityScore < FastConfidenceFloor) return false;
+        if (!candidate.QualityScoreAvailable || candidate.QualityScore < FastConfidenceFloor ||
+            HasSuspectSiteGlyph(candidate.Text)) return false;
         var words = candidate.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (words.Length < 2 && words.All(word => word.All(ch => ch < 0x2E80)))
         {
@@ -49,11 +57,13 @@ public static class OcrCandidateResolver
         return Score(candidate, glossary, settings) >= ContentFloor;
     }
 
-    private static double Score(OcrReadResult candidate, GlossaryService glossary, AppSettings settings)
+    private static double Score(OcrReadResult candidate, GlossaryService glossary, AppSettings settings,
+        bool includeConfidence = true)
     {
         var text = candidate.Text.Trim();
         if (text.Length == 0) return 0;
-        var score = Math.Clamp(candidate.QualityScore, 0, 1) * 0.55;
+        var score = includeConfidence && candidate.QualityScoreAvailable
+            ? Math.Clamp(candidate.QualityScore, 0, 1) * 0.55 : 0;
         if (glossary.TryTranslateStructuredCallout(text, "EN", settings, out _)) score += 0.25;
         if (glossary.ContainsKnownGameReference(text, settings)) score += 0.10;
         if (glossary.ContainsTacticalSlang(text, settings)) score += 0.05;
@@ -63,7 +73,14 @@ public static class OcrCandidateResolver
     }
 
     private static bool ContainsInvalidNoise(string text) =>
-        OcrNoiseHeuristics.HasScatteredHanNoise(text);
+        OcrNoiseHeuristics.HasScatteredHanNoise(text) || HasSuspectSiteGlyph(text);
+
+    // Request another reading, never rewrite ㄷ to C: genuine chat may contain
+    // consonant shorthand. Strip sender labels so nicknames do not trigger this.
+    public static bool HasSuspectSiteGlyph(string text) => Regex.IsMatch(
+        ChatTextSanitizer.ContentForLanguageDetection(text),
+        @"(?<![\p{L}\p{N}])[ㄱ-ㅎㅏ-ㅣ]\s+(?:롱|숏|쇼트|헤븐|메인|사이트|long\b|short\b|heaven\b|main\b|site\b)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     private static string Normalize(string value) =>
         string.Concat(value.Trim().Normalize(System.Text.NormalizationForm.FormKC)

@@ -9,10 +9,10 @@ public static class LiteTranslationGuard
 {
     private static Regex Pattern(string value) => new(value,
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-    private static readonly Regex Broken = Pattern(@"<unk>|\[unk\]|\uFFFD");
+    private static readonly Regex Broken = Pattern(@"<unk>|\[unk\]|\uFFFD|\u2047");
     private static readonly Regex Questions = Pattern(@"[?？]{2,}");
     private static readonly Regex Negative = Pattern(
-        @"\b(?:no|not|none|nobody|never|without|cannot|absent|missing|unable|stop|avoid|can['’]?t|won['’]?t|don['’]?t|doesn['’]?t|didn['’]?t|isn['’]?t|aren['’]?t)\b|없|않|아니|아님|못|모르|모름|몰라|말(?:고|자)|금지|불가|그만|멈춰|안\s+(?=[가-힣])|안(?:돼|되|가|와|오|해|했|보|죽|맞|밀|들어)|[가-힣]+지(?:는)?\s*마|ない|なく|ません|ずに|なし|禁止");
+        @"\b(?:no|not|none|nobody|never|without|cannot|absent|missing|unable|stop|avoid|can['’]?t|won['’]?t|don['’]?t|doesn['’]?t|didn['’]?t|isn['’]?t|aren['’]?t|(?:wasn|weren|haven|hasn|hadn|couldn|wouldn|shouldn|mustn)['’]?t)\b|없|않|아니|아님|(?<!잘)못|모르|모름|몰라|말(?:고|자)|금지|불가|그만|멈춰|(?<![가-힣])안(?:\s+(?=[가-힣])|돼|되|가|와|오|해|했|보|죽|맞|밀|들어)|[가-힣]+지(?:는)?\s*마|ない|なく|ません|ずに|なし|禁止");
     private static readonly Regex Prohibition = Pattern(
         @"(?:^|[.!?,;]\s*|\bplease\s+)(?:do\s+not|don['’]?t|avoid|stop)\b|\b(?:must|should)\s+not\b|\bwithout\b|[가-힣]+지(?:는)?\s*마|말(?:고|자)|금지|그만|멈춰|ないで|ないように|禁止|(?:する|行く|来る)な(?:[\s、。!！]|$)");
     private static readonly Regex Uncertain = Pattern(

@@ -13,6 +13,44 @@ public partial class MainWindow
     private TestArenaReadyFile? _testArenaReady;
     private DispatcherTimer? _testModeTimer;
     private DateTime _testModeStartedUtc;
+    private int _testOcrSnapshotCount;
+    private readonly HashSet<ulong> _testOcrSnapshotHashes = new();
+
+    // Explicit test-only opt-in. Store the exact OCR crop, not the desktop, so
+    // alternate recognizers can be compared against identical input bytes.
+    private string? SaveTestOcrInput(byte[] png, System.Drawing.Rectangle region, ulong hash)
+    {
+        if (!TestModeContext.Enabled ||
+            Environment.GetEnvironmentVariable("VALTRANS_TEST_SAVE_OCR_FRAMES") != "1" ||
+            _testOcrSnapshotCount >= 32 || !_testOcrSnapshotHashes.Add(hash)) return null;
+        try
+        {
+            var directory = Path.Combine(Path.GetDirectoryName(TestModeContext.OutputPath)!, "ocr-inputs");
+            Directory.CreateDirectory(directory);
+            var path = Path.Combine(directory, $"{++_testOcrSnapshotCount:D3}-{hash:x16}");
+            File.WriteAllBytes(path + ".png", png);
+            File.WriteAllText(path + ".capture.json", System.Text.Json.JsonSerializer.Serialize(new
+            {
+                capturedUtc = DateTime.UtcNow, engine = _settings.OcrEngine,
+                region = new { region.X, region.Y, region.Width, region.Height },
+                frameHash = hash, bytes = png.Length
+            }));
+            return path;
+        }
+        catch (Exception error)
+        {
+            RecordOcrStage($"Test snapshot failed: {error.Message}");
+            return null;
+        }
+    }
+
+    private static void SaveTestOcrResult(string? path, OcrReadResult result)
+    {
+        if (path is null) return;
+        try { File.WriteAllText(path + ".result.json", System.Text.Json.JsonSerializer.Serialize(result)); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
 
     private async void ConfigureTestModeIfNeeded()
     {
@@ -35,6 +73,8 @@ public partial class MainWindow
         ApplySettingsToUi();
 
         _testScenario = TestScenarioFile.Load(TestModeContext.ScenarioPath);
+        if (_testScenario.FullRegionConsensus)
+            _settings.OcrTwoFrameConsensus = true;
         if (_testScenario.Tags.Any(tag => tag.Equals("zh", StringComparison.OrdinalIgnoreCase) ||
                                             tag.Equals("mixed", StringComparison.OrdinalIgnoreCase)))
         {
@@ -133,9 +173,9 @@ public partial class MainWindow
                 FinishTestMode("FAIL", "Hybrid OCR requires Fast + Paddle runtimes");
                 return false;
             }
-            if (!await PrepareFastOcrAsync())
+            if (!await PrepareHybridOcrAsync())
             {
-                FinishTestMode("FAIL", "Hybrid OCR fast prepare failed");
+                FinishTestMode("FAIL", "Hybrid OCR prepare failed");
                 return false;
             }
         }
@@ -240,22 +280,29 @@ public partial class MainWindow
                 if (pending is null || pending.Status == "PASS") return false;
                 return SourceMatches(item.Source, record.Ocr.Raw) ||
                        SourceMatches(item.Source, record.Normalization.Text) ||
-                       SourceMatches(item.Source, record.Translation.Input) ||
-                       expectationOutputMatches(item, record.Translation.Output);
+                       SourceMatches(item.Source, record.Translation.Input);
             });
-            if (expectation is null) return;
+            if (expectation is null)
+            {
+                _testRunReport.ObserveUnmatchedTrace(record);
+                return;
+            }
 
             var caseResult = _testRunReport.Cases.FirstOrDefault(item => item.Source == expectation.Source);
             if (caseResult is null || caseResult.Status == "PASS") return;
 
-            var accepted = expectationOutputMatches(expectation, record.Translation.Output);
+            var completeSource = TestRunReportWriter.CompleteSourceMatches(expectation.Source, record.Translation.Input);
+            var accepted = completeSource && expectationOutputMatches(expectation, record.Translation.Output);
             caseResult.TraceId = record.Id;
             caseResult.OcrRaw = record.Ocr.Raw;
             caseResult.TranslationOutput = record.Translation.Output;
+            caseResult.TranslationInput = record.Translation.Input;
+            caseResult.CompleteSourceMatched = completeSource;
             caseResult.TotalLatencyMs = record.Latency.TotalMs;
             caseResult.Status = accepted ? "PASS" : "FAIL";
             caseResult.Detail = accepted
                 ? "translation matched accepted list"
+                : !completeSource ? "OCR/translation input does not preserve the complete expected source"
                 : $"expected one of [{string.Join(", ", expectation.AcceptedTranslations)}]";
 
             if (_testRunReport.Cases.Count > 0 && _testRunReport.Cases.All(item => item.Status == "PASS"))
@@ -297,7 +344,7 @@ public partial class MainWindow
             TotalP50Ms = latencies.Length == 0 ? null : Percentile(latencies, 0.5)
         };
         if (!string.IsNullOrWhiteSpace(_lastOcrStage))
-            _testRunReport.Failures.Add($"lastOcrStage={_lastOcrStage}");
+            _testRunReport.Diagnostics.Add($"lastOcrStage={_lastOcrStage}");
 
         TestRunReportWriter.Write(TestModeContext.OutputPath, _testRunReport);
         TestModeExitCode.ExitCode = status == "PASS" ? 0 : 1;

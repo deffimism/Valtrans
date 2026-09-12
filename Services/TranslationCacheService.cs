@@ -6,7 +6,7 @@ namespace Valtrans.Services;
 /// <summary>Phase 10: repeat tactical/chat phrase cache keyed by normalized source.</summary>
 public sealed class TranslationCacheService
 {
-    private readonly ConcurrentDictionary<string, string> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, string> _cache = new(StringComparer.Ordinal);
     private const int MaxEntries = 512;
 
     public bool TryGet(string source, string targetLanguage, string style, AppSettings settings, out string translated)
@@ -27,10 +27,15 @@ public sealed class TranslationCacheService
         _cache[BuildKey(source, targetLanguage, style, settings)] = translated;
     }
 
-    private static string BuildKey(string source, string targetLanguage, string style, AppSettings settings)
+    internal static string BuildKey(string source, string targetLanguage, string style, AppSettings settings)
     {
-        var normalized = string.Concat(source.Trim().Normalize(System.Text.NormalizationForm.FormKC)
+        var normalized = string.Join(" ", source.Trim().Normalize(System.Text.NormalizationForm.FormKC)
             .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        return $"{settings.Game}|{targetLanguage}|{style}|{normalized}";
+        return System.Text.Json.JsonSerializer.Serialize(new
+        {
+            settings.Game, targetLanguage, style, normalized,
+            settings.TranslationProvider, settings.LocalAiModel, settings.ServerRegion,
+            glossary = settings.CustomGlossary.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray()
+        });
     }
 }

@@ -6,8 +6,8 @@ Windows 게임 채팅 번역 · Local game chat translation for Windows
 
 [한국어 사용법](#korean) · [English guide](#english)
 
-> **작성 기준 버전 / Documentation baseline: v0.4.0-beta**<br>
-> **검토일 / Reviewed: 2026-09-11** (v0.4.0-beta)<br>
+> **작성 기준 버전 / Documentation baseline: v0.5.0-beta**<br>
+> **검토일 / Reviewed: 2026-09-13** (v0.5.0-beta)<br>
 > 현재 화면과 사용 흐름을 기준으로 작성했습니다. 사용법이 변하지 않으면 앱 버전이 올라가도 README는 업데이트되지 않을 수 있습니다.<br>
 > This guide describes the interface and workflow at the version above. It may remain unchanged across releases when the usage instructions still apply.
 
@@ -21,38 +21,38 @@ Valtrans는 VALORANT 채팅을 한국어·영어·일본어 사이에서 번역�
 
 - **보내는 채팅:** 게임 채팅창에 입력한 내용을 단축키로 번역해 교체합니다. 전송은 직접 합니다.
 - **받는 채팅:** 게임의 채팅 영역을 OCR로 읽고 새 메시지의 번역을 오버레이에 표시합니다.
-- **로컬 번역:** 기본 구성은 Hy-MT2 1.8B를 우선 사용하고 필요하면 Valtrans Lite를 시도합니다.
+- **로컬 번역:** 기본 구성은 검증된 짧은 콜을 사전으로 처리하고, 그 외 문장은 Hy-MT2 1.8B로 번역합니다. AI 실패 시 검증되지 않은 Lite 번역으로 대체하지 않습니다.
 - **FPS 표현:** 약어·은어·고유명사 사전과 번역 규칙을 사용합니다. 인원·방향·부정·불확실성을 보존하려 하지만 오역은 가능합니다.
 
 OCR은 **화면을 글자로 읽는 단계**, 번역 엔진은 **그 글자를 다른 언어로 바꾸는 단계**입니다. 번역 모델을 바꿔도 OCR이 잘못 읽은 원문 자체는 고쳐지지 않습니다.
 
-#### v0.4.0-beta 주요 변경
+#### v0.5.0-beta 주요 변경
 
-- **일본어 OCR:** Windows OCR은 일본어 인식 한계가 있습니다. JP 채팅은 **Fast** 또는 **Hybrid** OCR을 권장합니다. 시작 가이드에 언어팩·엔진 안내가 표시됩니다.
-- **OCR 테스트:** 대시보드 **OCR 테스트**가 선택한 엔진(Windows / Fast / Hybrid / Paddle) 경로를 모두 지원합니다.
-- **오버레이:** 번역이 생략되면 오버레이에 **생략 이유**를 잠시 표시합니다.
-- **해상도:** 16:9가 아닌 화면비에서도 채팅 영역을 높이 기준으로 보정합니다(16:9는 동일).
-- **Lite:** 일본어↔한국어는 영어 피벗(최대 2회 모델 호출). `scripts/Benchmark-LitePivot.ps1`로 지연을 측정할 수 있습니다.
+- **품질 우선 번역:** 짧은 콜은 사전·규칙, 일반 문장은 선택한 AI로 처리합니다. AI 실패 시 확인되지 않은 Lite 결과로 자동 대체하지 않습니다.
+- **콜과 문장 보존:** 원탭·트레이드·복합 위치 표현을 보완하고, 채택한 수신 브리핑의 조건·부정·정정 절을 유지합니다. 의미 검사는 모든 오역을 막지는 못합니다.
+- **다국어 OCR:** Fast OCR의 한·영·일 줄 인식과 Hybrid 재인식 후보 선택을 보완했습니다. 같은 줄 결과를 재사용해 반복 인식 비용을 줄입니다. 장면·글자 크기·장치에 따라 정확도와 지연이 달라집니다.
+- **간단한 준비:** 기본 모드에는 Lite 설치·예열이 필요하지 않습니다. 가이드와 호환성 검사는 현재 선택한 번역 모델을 기준으로 합니다.
+- **Lite 단독 모드:** 한국어→영어 모델과 호스트를 보완했습니다. 일본어↔한국어 영어 피벗은 의미 손실 가능성이 남아 있어 자유 문장에 주의하세요.
 
 ### 1. 설치와 첫 실행
 
 1. [GitHub Releases](https://github.com/deffimism/Valtrans/releases)에서 배포 ZIP을 받아 **압축을 모두 풉니다**.
 2. 폴더 안의 `Valtrans.exe`를 실행합니다. EXE만 따로 옮기지 말고 DLL과 `Ocr` 폴더 등 동봉 파일을 함께 유지하세요.
 3. .NET 실행 환경이 필요하다는 안내가 나오면 **.NET 10 Desktop Runtime**을 설치합니다.
-4. 왼쪽 **시작 가이드 · 점검**에서 **권장 엔진 준비**를 누릅니다. Lite → Hy-MT2 → Paddle OCR 순서로 준비합니다. 최초 설치·모델 다운로드에는 인터넷이 필요합니다.
+4. 왼쪽 **시작 가이드 · 점검**에서 **권장 구성 설치·적용**을 누릅니다. Hy-MT2 → Paddle OCR 순서로 준비합니다. 기본 모드에는 Lite 설치가 필요하지 않습니다. 최초 설치·모델 다운로드에는 인터넷이 필요합니다.
 5. **번역 엔진**에서 설치 진행과 **예열 완료** 상태를 확인합니다. 처음 준비할 때는 시간이 걸릴 수 있습니다.
 6. Paddle 설치 안내가 나오면 용량·GPU 조건을 확인하고 승인합니다. 필요한 uv·Python·라이브러리·OCR 모델을 자동 설치한 뒤 모델을 준비합니다. OCR만 준비하려면 같은 시작 가이드의 **OCR 설치 · 준비**를 누르세요. NVIDIA GPU 환경이 맞지 않으면 대시보드에서 Windows OCR을 선택하고 언어팩을 설치하세요.
 7. 아래 사용법에 따라 언어를 정하고 상단 **설정 저장**을 누릅니다.
 
 기본 사용에는 Windows 10/11과 .NET 10 Desktop Runtime이 필요합니다. 로컬 AI는 Ollama와 모델이 필요하며 앱에서 설치를 진행할 수 있습니다. **API 키·Docker·WSL은 필요하지 않습니다.**
 
-**권장값 적용 / 권장 엔진 준비 주의:** 엔진뿐 아니라 모델·단축키·언어·필터·오버레이 등의 설정도 권장값으로 바꿉니다. 이미 설정해 둔 사용자는 **번역 엔진**의 개별 설치 버튼을 이용하세요.
+**권장값 적용 / 권장 구성 설치·적용 주의:** 엔진뿐 아니라 모델·단축키·언어·필터·오버레이 등의 설정도 권장값으로 바꿉니다. 이미 설정해 둔 사용자는 **번역 엔진**의 개별 설치 버튼을 이용하세요. 가이드의 준비 상태와 자동 복구는 현재 선택한 번역 모델을 기준으로 합니다.
 
 #### 처음에는 이렇게 사용하세요
 
 | 항목 | 권장 시작값 |
 | --- | --- |
-| 번역 엔진 | 무료 로컬 · AI 우선 + Lite 대체 |
+| 번역 엔진 | 스마트 복합 · 사전 + 로컬 AI |
 | 로컬 모델 | Hy-MT2 1.8B |
 | 보내는 채팅 목표 언어 | English |
 | 받는 채팅 원문 언어 | EN / JP / KO 모두 선택 |
@@ -82,6 +82,8 @@ OCR 선택·상태·**OCR 설치 / OCR 준비** 버튼은 **채팅 대시보드 
 3. 문장을 입력한 뒤 기본 단축키 **백슬래시 `\`**를 누릅니다.
 4. 입력 내용이 번역문으로 교체될 때까지 기다립니다. 처리 중에는 추가 입력을 잠시 멈춰 주세요.
 5. 결과를 확인하고 **Enter를 직접 눌러 전송**합니다.
+
+번역 중 다른 창으로 이동하거나 입력 내용을 바꾸면 이전 번역으로 덮어쓰지 않고 취소합니다. 게임 창에서 현재 문장을 다시 번역해 주세요. 방향·인원·위치 등의 검사에 실패해도 원문을 유지합니다. 검사는 모든 오역을 잡아내지는 못하므로 전송 전 확인이 필요합니다.
 
 단축키는 입력 내용을 선택·복사하고 번역문으로 교체하는 데 사용됩니다. 일반 게임 조작 중에 누르지 말고 **채팅 입력창을 연 상태**에서 사용하세요.
 
@@ -113,6 +115,8 @@ VALORANT 추천 범위는 게임 화면 **좌측 하단 (0%,0%)** 기준으로 �
 - 출력 언어와 같은 본문
 - 시스템·방송 문구와 채팅 입력줄
 - 브리핑 필터가 게임 관련성이 낮다고 판단한 잡담
+
+브리핑 필터는 메시지를 표시할지 판단합니다. 채택한 브리핑은 조건·부정·정정 내용을 잃지 않도록 문장 전체를 번역하며, 섞여 있는 감정 표현까지 함께 나올 수 있습니다. 필터나 의미 검사는 모든 오역을 찾아내지 못합니다.
 
 닉네임·채널 표시는 본문과 분리합니다. **내가 보낸 메시지라는 이유만으로 제외하지 않습니다.** 자신의 일본어 메시지로도 시험할 수 있지만 같은 문장을 반복하면 중복으로 걸러질 수 있습니다.
 
@@ -154,9 +158,13 @@ VALORANT 추천 범위는 게임 화면 **좌측 하단 (0%,0%)** 기준으로 �
 
 | 선택 | 용도와 주의점 |
 | --- | --- |
-| 무료 로컬 · AI 우선 + Lite 대체 | 기본 구성. 확실한 표현은 사전·규칙으로 처리하고, 일반 문장은 AI 우선으로 번역하며 필요하면 Lite를 시도 |
+| 스마트 복합 · 사전 + 로컬 AI | 기본 구성. 검증된 짧은 표현은 사전·규칙으로 처리하고, 일반 문장은 선택한 AI로 번역. AI 실패나 의미 검사 실패 시 보류하며 Lite로 자동 대체하지 않음 |
 | 로컬 AI | Hy-MT2 / Qwen / TranslateGemma. 모델이 커지면 메모리와 지연도 증가할 수 있음 |
 | Valtrans Lite | CPU 기반 경량 번역. 일본어↔한국어는 영어를 거칠 수 있어 표현 손실에 주의 |
+
+**품질을 확인하려면:** 먼저 **번역 테스트 · 사전**에서 실제로 쓸 브리핑과 잡담을 각각 시험하세요. Lite는 별도로 선택하는 CPU 엔진이며, 설치·호환성 검사를 통과해도 긴 문장이나 일본어·한국어에서 무관한 뜻을 낼 수 있습니다. 기본 모드는 Lite를 설치·예열하거나 실패 시 자동 호출하지 않습니다. Hy-MT2 7B는 선택 가능한 비교 후보지만 더 많은 메모리를 사용하며 게임 중 지연은 PC마다 다릅니다. 호환성 검사는 선택한 엔진에 두 문장을 보내는 기본 검사이지 정답률 검사가 아닙니다.
+
+지명만 입력하면 임의로 인원을 붙이지 않습니다. 사전은 전체 문장에 맞는 명확한 콜아웃만 바로 처리하며, 조건·인용·복합 문장은 함부로 짧게 잘라내지 않습니다. 수신 결과의 의미 검사가 실패하면 해당 번역을 오버레이와 캐시에 넣지 않습니다.
 
 모델 변경은 **모델 선택 → 로컬 AI 설치 → 예열 상태 확인 → 설정 저장** 순서로 확인하세요. Lite는 **Valtrans Lite 준비**로 설치합니다. 설치와 예열은 다릅니다. 모델 파일이 있어도 메모리에 준비될 때까지 첫 번역이 느릴 수 있습니다.
 
@@ -168,7 +176,7 @@ VALORANT 추천 범위는 게임 화면 **좌측 하단 (0%,0%)** 기준으로 �
 
 혼합 언어를 함께 읽는 **기본 OCR 엔진**입니다. 첫 사용 전에 별도 실행 환경과 모델을 준비해야 합니다. 기본값이지만 실험적 기능이며 인식 품질·지연에는 한계가 있습니다.
 
-1. **시작 가이드 · 점검 → OCR 설치 · 준비**를 누릅니다. **권장 엔진 준비**에서도 이 과정이 자동으로 이어집니다.
+1. **시작 가이드 · 점검 → OCR 설치 · 준비**를 누릅니다. **권장 구성 설치·적용**에서도 이 과정이 자동으로 이어집니다.
 2. 설치 안내를 승인하면 필요한 도구·모델을 자동으로 받습니다. 진행과 오류는 같은 가이드에 표시됩니다.
 3. 설치가 끝나면 자동으로 OCR 모델을 준비합니다. 이미 설치되어 있으면 다운로드 없이 준비를 시도합니다. 대시보드의 **OCR 설치**로 설치를 다시 실행하거나 **OCR 준비**로 이어갈 수 있습니다.
 4. **OCR 테스트**로 결과를 비교한 뒤 OCR을 시작합니다.
@@ -252,18 +260,18 @@ Valtrans translates VALORANT chat between Korean, English and Japanese on Window
 
 - **Outgoing:** replaces text in the game's chat input using a hotkey. You send it yourself.
 - **Incoming:** reads game chat with OCR and displays new translations in an overlay.
-- **Local translation:** the default uses Hy-MT2 1.8B first and attempts Valtrans Lite when needed.
+- **Local translation:** verified short callouts use bundled rules; other text uses Hy-MT2 1.8B. Failed AI translations are withheld, not replaced with unverified Lite output.
 - **FPS terminology:** dictionaries and rules help preserve names, slang, counts, directions and negation, but errors remain possible.
 
 **OCR reads pixels into text. Translation converts that text into another language.** A larger translation model does not fix incorrectly recognized source text.
 
-#### v0.4.0-beta highlights
+#### v0.5.0-beta highlights
 
-- **Japanese OCR:** Windows OCR has limited Japanese accuracy; prefer **Fast** or **Hybrid** for JP chat. The startup guide shows engine and language-pack guidance.
-- **OCR test:** the dashboard test uses the currently selected engine path (Windows / Fast / Hybrid / Paddle).
-- **Overlay:** skipped messages can show a short **skip reason** on the overlay.
-- **Aspect ratio:** non-16:9 displays use height-based chat-region scaling (16:9 math unchanged).
-- **Lite:** Japanese↔Korean may pivot through English (up to two model calls). Measure with `scripts/Benchmark-LitePivot.ps1`.
+- **Quality-first translation:** short verified callouts use rules; other text uses the selected AI. AI failures no longer trigger unverified Lite fallback.
+- **Meaning preservation:** improved one-shot, trade and compound-location handling. Accepted incoming briefings retain conditions, negation and corrections. Meaning checks cannot prevent every mistranslation.
+- **Multilingual OCR:** improved Korean/English/Japanese line recognition in Fast OCR and retry selection in Hybrid. Identical line results can be reused; accuracy and latency still depend on the scene, text size and hardware.
+- **Simpler preparation:** the default mode does not require Lite installation or warmup. Readiness and compatibility checks use your selected translation model.
+- **Standalone Lite:** updated Korean→English model and host. Japanese↔Korean English pivots can still lose meaning, especially in free-form sentences.
 
 The interface currently uses Korean labels. The labels below match the app; this guide does not imply an English UI option.
 
@@ -272,14 +280,14 @@ The interface currently uses Korean labels. The labels below match the app; this
 1. Download the ZIP from [GitHub Releases](https://github.com/deffimism/Valtrans/releases) and **extract everything**.
 2. Run `Valtrans.exe`. Keep the DLLs, `Ocr` folder and other bundled files beside it.
 3. Install the **.NET 10 Desktop Runtime** if prompted. Windows 10/11 is required.
-4. Open **시작 가이드 · 점검** and click **권장 엔진 준비**. Setup proceeds through Lite, Hy-MT2 and Paddle OCR.
+4. Open **시작 가이드 · 점검** and click **권장 구성 설치·적용**. Setup prepares Hy-MT2, then Paddle OCR. Lite is not required for the default mode.
 5. Wait for installation, model downloads and **예열 완료** (Warm-up complete) in **번역 엔진**.
 6. Review and approve the Paddle setup prompt. Required tools (including uv), Python, libraries and the model are downloaded automatically, followed by model preparation. Use **OCR 설치 · 준비** in the same guide for OCR-only setup. If your NVIDIA GPU environment is unsuitable, select Windows OCR on the dashboard and install its language packs.
 7. Configure languages and click **설정 저장** (Save settings).
 
 Ollama and the local model can be prepared through the app. Initial downloads require internet access. **No API key, Docker or WSL is required.**
 
-**Warning:** Apply recommended settings / Prepare recommended engines also changes the model, hotkey, languages, filter and overlay preferences. Use individual engine setup buttons if you want to keep a customized setup.
+**Warning:** Apply recommended settings / Install and apply recommended configuration also changes the model, hotkey, languages, filter and overlay preferences. Use individual engine setup buttons if you want to keep a customized setup. Readiness and automatic repair check your currently selected translation model.
 
 Start with the default hybrid engine, **Hy-MT2 1.8B**, **PaddleOCR-VL**, EN/JP/KO sources and a 15-second overlay duration. Outgoing English and incoming Korean are defaults; choose your own target languages. Use **잡담도 번역** (Include casual chat) when testing greetings.
 
@@ -303,6 +311,8 @@ The OCR selector, status and **OCR 설치 / OCR 준비** buttons are always visi
 4. Wait for replacement; avoid typing during processing.
 5. Review the result and **press Enter yourself to send it**.
 
+If you switch away from the game or edit the input while translation is running, replacement is cancelled instead of overwriting the newer chat. Return to the game and translate again. Failed direction/count/location checks also leave the original input intact. These checks cannot detect every mistranslation; review before sending.
+
 Use the hotkey only with the chat input open. It selects/copies the input and replaces it with translated text.
 
 Click **입력** beside the hotkey to assign a single key or combination; Esc cancels capture. Avoid movement and ability keys. Some keyboards label the backslash key `₩`; `Oem5` is its key identifier. The hotkey is active in supported foreground games, so use the app's translation test instead of a text editor. Text already in the target language may be skipped.
@@ -325,6 +335,8 @@ The VALORANT preset uses bottom-left client coordinates: message OCR covers **X 
 #### Why messages can be skipped
 
 Startup chat, previously processed text, system/broadcast messages, input rows and text already in the output language may be excluded. The briefing filter can also exclude casual chat.
+
+The briefing filter selects whole messages. Accepted briefings retain all clauses, including conditions, negation and corrections; mixed emotional language may therefore remain. Neither the filter nor the meaning checks detect every mistranslation.
 
 Nicknames and channel labels are separated from the body. **Your messages are not excluded merely because you sent them**, but repeated identical text can be deduplicated.
 
@@ -363,9 +375,13 @@ A temporary editing surface appears even with a fully transparent background.
 
 | Engine | Use |
 | --- | --- |
-| Local AI first + Lite fallback | Default. Known expressions can use rules; general text uses AI first, with Lite attempted when needed |
+| Smart hybrid · rules + local AI | Default. Verified short callouts use rules; other text uses the selected AI. AI or meaning-check failures are withheld without automatic Lite fallback |
 | Local AI | Hy-MT2 / Qwen / TranslateGemma; larger models can use more memory and add latency |
 | Valtrans Lite | Lightweight CPU translation; Japanese/Korean may pass through English and lose meaning |
+
+**Check quality first:** try your own callouts and casual messages in **번역 테스트 · 사전**. Lite is a separately selected CPU engine and can return unrelated meanings even after installation or compatibility checks pass. The default mode does not install, warm up or automatically fall back to Lite. Hy-MT2 7B is an optional comparison model, not a guaranteed fix; it uses more memory and game-time latency depends on your PC. Compatibility checks send two probes to the selected engine; they are not an accuracy score.
+
+Standalone locations do not gain invented counts. Exact rules are restricted to complete recognized callouts; conditions and quoted speech should not be shortened into a different instruction. Incoming translations that fail the final fact checks are withheld from the overlay and cache.
 
 To switch models: select the model → **로컬 AI 설치** → **예열 상태 확인** → save. Prepare Lite with **Valtrans Lite 준비**. Downloaded does not necessarily mean warmed up in memory.
 
@@ -475,6 +491,9 @@ Test Arena E2E는 실제 Capture→OCR 경로를 사용합니다. Arena 창 위�
 
 합성 OCR·모의 응답 검사는 실게임 정확도 측정과 다릅니다.<br>
 Synthetic OCR and mocked-response tests are not real-game accuracy measurements.
+
+실제 설치 모델로 송신·수신 표본을 검사하려면 [품질 검사 절차](testdata/translation-quality/README.md)를 참고하세요. 원문·번역을 직접 대조해야 하며 검사기의 PASS는 정답률이 아닙니다.<br>
+For real installed-model send/receive checks, see the [quality test procedure](testdata/translation-quality/README.md). Compare translations with their sources; validator PASS is not semantic correctness.
 
 | Script | Scenario | OCR |
 | --- | --- | --- |

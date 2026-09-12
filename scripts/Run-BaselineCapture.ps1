@@ -9,8 +9,11 @@ $ErrorActionPreference = 'Stop'
 $root = Resolve-Path "$PSScriptRoot/.."
 . "$PSScriptRoot/Resolve-ValtransBuild.ps1"
 dotnet build "$root/Valtrans.csproj" -c Release | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Build failed: Valtrans.csproj (exit $LASTEXITCODE)" }
 dotnet build "$root/test/TestArena/Valtrans.TestArena.csproj" -c Release | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Build failed: test/TestArena/Valtrans.TestArena.csproj (exit $LASTEXITCODE)" }
 dotnet build "$root/test/TestRunner/Valtrans.TestRunner.csproj" -c Release | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Build failed: test/TestRunner/Valtrans.TestRunner.csproj (exit $LASTEXITCODE)" }
 $runner = Get-ValtransTestRunner -Root $root
 $scenarioPath = Resolve-Path -LiteralPath $Scenario
 $baselinePath = [IO.Path]::GetFullPath($OutputPath)

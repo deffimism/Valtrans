@@ -35,10 +35,10 @@ if (-not (Test-Path -LiteralPath $python)) {
     if ($LASTEXITCODE -ne 0) { throw 'Python environment creation failed' }
 }
 Write-Output '2/3 Fast OCR libraries download'
-& $uv pip install --python $python 'paddlepaddle==3.0.0' 'paddleocr>=2.10.0' 'pillow>=10.0.0' 'numpy>=1.26.0'
+& $uv pip install --python $python 'paddlepaddle==3.0.0' 'paddleocr==3.7.0' 'paddlex==3.7.2' 'pillow==12.3.0' 'numpy==2.3.5'
 if ($LASTEXITCODE -ne 0) { throw 'Fast OCR library installation failed' }
 Write-Output '3/3 Writing runtime marker'
-@{ engine = 'PP-OCRv5'; installedUtc = (Get-Date).ToUniversalTime().ToString('o') } |
+@{ engine = 'PP-OCRv5'; chatRuntimeSchema = 2; paddleocr = '3.7.0'; installedUtc = (Get-Date).ToUniversalTime().ToString('o') } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runtime 'fast_model.json') -Encoding UTF8
 Write-Output 'Fast OCR installation complete'
 Write-Output 'Tip: first OCR load may take several minutes. Run scripts/Warmup-FastOcr.ps1 before ZH E2E tests.'

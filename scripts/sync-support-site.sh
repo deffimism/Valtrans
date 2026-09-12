@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Run on the Linux homelab host (repo root or server/ directory).
+# Linux homelab deploy (no git). SMB workflow:
+#   1) Windows: scripts/Package-SupportSite.ps1
+#   2) Copy releases/valtrans-support-v0.4.0-beta.tar.gz to ~/AppData/Valtrans/
+#   3) tar -xzf valtrans-support-v0.4.0-beta.tar.gz && bash scripts/sync-support-site.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SERVER_DIR="$ROOT/server"
 DOWNLOAD_URL="${VALTRANS_DOWNLOAD_URL:-https://github.com/deffimism/Valtrans/releases/download/v0.4.0-beta/v0.4.0-beta.zip}"
 SUPPORT_PORT="${VALTRANS_SUPPORT_PORT:-13020}"
+SUPPORT_HOST="${VALTRANS_SUPPORT_HOST:-192.168.0.19}"
 
 cd "$SERVER_DIR"
 export VALTRANS_DOWNLOAD_URL="$DOWNLOAD_URL"
@@ -20,5 +24,5 @@ else
   exit 1
 fi
 
-curl -fsS "http://127.0.0.1:${SUPPORT_PORT}/health"
+curl -fsS --retry 12 --retry-connrefused --retry-delay 2 "http://${SUPPORT_HOST}:${SUPPORT_PORT}/health"
 echo "Support site sync complete."

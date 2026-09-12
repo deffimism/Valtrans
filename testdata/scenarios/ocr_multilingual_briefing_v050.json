@@ -1,0 +1,25 @@
+{
+  "scenario": "ocr_multilingual_briefing_v050",
+  "tags": ["ocr", "regression", "multilingual", "roles", "negation"],
+  "resolution": "1920x1080",
+  "dpi": 125,
+  "chat": { "fontSize": 20, "opacity": 0.95, "lineSpacing": 5, "maxVisibleLines": 8 },
+  "background": { "mode": "animated-gradient", "brightness": 1.0, "motionSpeed": 0.4 },
+  "animation": { "chatFadeIn": true, "chatScroll": true, "backgroundMotion": true },
+  "events": [
+    { "atMs": 800, "speaker": "DEFFI", "text": "Aヘブン三人", "channel": "TEAM" },
+    { "atMs": 8800, "speaker": "김데피", "text": "내가 죽어도 아직 피킹하지 마", "channel": "TEAM" },
+    { "atMs": 16800, "speaker": "PlayerA", "text": "Three teammates are holding A main", "channel": "TEAM" },
+    { "atMs": 24800, "speaker": "PlayerB", "text": "私が死んでもまだピークしないで", "channel": "TEAM" },
+    { "atMs": 32800, "speaker": "PlayerC", "text": "스파이크 C 롱에 떨어졌어", "channel": "TEAM" },
+    { "atMs": 40800, "speaker": "PlayerD", "text": "There may be four C long, but I'm not sure", "channel": "TEAM" }
+  ],
+  "expectations": [
+    { "source": "Aヘブン三人", "acceptedTranslations": ["A 헤븐 3명"] },
+    { "source": "내가 죽어도 아직 피킹하지 마", "acceptedTranslations": ["even if I die, don't peek yet"] },
+    { "source": "Three teammates are holding A main", "acceptedTranslations": ["아군 3명 A 메인 지키는 중"] },
+    { "source": "私が死んでもまだピークしないで", "acceptedTranslations": ["내가 죽어도 아직 피킹하지 마"] },
+    { "source": "스파이크 C 롱에 떨어졌어", "acceptedTranslations": ["spike down C Long"] },
+    { "source": "There may be four C long, but I'm not sure", "acceptedTranslations": ["C 롱에 4명 있을지도, 확실하진 않아"] }
+  ]
+}

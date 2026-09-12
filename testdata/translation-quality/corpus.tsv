@@ -1,0 +1,81 @@
+id	category	ko	en	jp
+01	briefing	B	B	B
+02	briefing	B 메인	B main	Bメイン
+03	briefing	B 헤븐에 두 명	Two B heaven	Bヘブンに二人
+04	briefing	A 롱에 세 명	Three A long	Aロングに三人
+05	briefing	C에 한 명	One C	Cに一人
+06	briefing	미드 둘	mid 2	ミッド二つ
+07	briefing	B 러시	B rush	Bラッシュ
+08	briefing	왼쪽 조심해	watch left	左に気をつけて
+09	briefing	왼쪽으로 가지 마	don't go left	左に行かないで
+10	briefing	오른쪽에는 적 없어	No enemies on the right	右に敵はいない
+11	briefing	아마 오른쪽에 두 명	Maybe two on the right	たぶん右に二人
+12	briefing	B로 가자 말고 A로 가자	Don't go B, go A instead	Bに行かないで、Aに行こう
+13	briefing	A 메인 아니고 B 헤븐	Not A main, B heaven	AメインじゃなくてBヘブン
+14	briefing	내가 섬광 쓸 때까지 기다려	Wait until I flash	自分がフラッシュを入れるまで待って
+15	briefing	아직 들어가지 마	Don't enter yet	まだ入らないで
+16	briefing	지금 들어가도 돼	You can enter now	今入っていいよ
+17	briefing	뒤에서 발소리 들었어	I heard footsteps behind us	後ろで足音がした
+18	briefing	뒤에 있을 수도 있어	Someone might be behind us	後ろにいるかもしれない
+19	briefing	아군 둘이 B 헤븐 지키고 있어	Two teammates are holding B heaven	味方二人がBヘブンを守ってる
+20	briefing	왼쪽 하나 오른쪽 둘	One left, two right	左に一人、右に二人
+21	briefing	제트한테 80 넣었어	I hit Jett for 80	ジェットに80入れた
+22	briefing	제트 딸피인데 정확한 체력은 몰라	Jett is low, I don't know her exact HP	ジェットはローだけど正確な体力はわからない
+23	briefing	세이지 힐 있어?	Sage, do you have heal?	セージ、ヒールある？
+24	briefing	힐 없어 10초 뒤에 가능	No heal, ready in 10 seconds	ヒールない、あと10秒で使える
+25	briefing	스파이크 B에 떨어졌어	Spike dropped B	スパイクがBに落ちた
+26	briefing	스파이크 줍지 말고 각 잡아	Don't pick up the spike, hold the angle	スパイクを拾わずに射線を見て
+27	briefing	설치할게 엄호해줘	I'm planting, cover me	設置するからカバーして
+28	briefing	해체하는 척만 해	Just fake the defuse	解除するふりだけして
+29	briefing	해체 절반 했어	Defuse is halfway done	解除半分まで進んだ
+30	briefing	시간 없으니까 싸우지 말고 설치해	No time, stop fighting and plant	時間ないから戦わずに設置して
+31	briefing	이번 라운드 세이브하자	Let's save this round	このラウンドはセーブしよう
+32	briefing	나 3900 있어 밴달 사줄 수 있어	I have 3900, I can buy you a Vandal	3900あるからヴァンダル買ってあげられる
+33	briefing	다음 판 풀바이 하자	Full buy next round	次のラウンドはフルバイしよう
+34	briefing	오퍼 들고 있으니까 혼자 피킹하지 마	They have an Operator, don't peek alone	オペレーター持ってるから一人でピークしないで
+35	briefing	내 뒤에 붙어서 트레이드해줘	Stay behind me and trade me	後ろについてトレードして
+36	briefing	연막 사라지면 같이 들어가자	Let's go in together when the smoke fades	スモークが消えたら一緒に入ろう
+37	briefing	궁 아직 안 썼어	I haven't used my ult yet	まだウルト使ってない
+38	briefing	상대 궁 빠졌어	They used their ult	相手のウルト使わせた
+39	briefing	플래시 온다 뒤돌아	Flash incoming, turn away	フラッシュ来る、後ろ向いて
+40	briefing	푸시하지 마 내가 먼저 볼게	Don't push, I'll check first	プッシュしないで、先に自分が見る
+41	briefing	내가 죽으면 바로 같이 피킹해	Peek together as soon as I die	自分が死んだらすぐ一緒にピークして
+42	briefing	한 명인 줄 알았는데 세 명이었어	I thought it was one, but there were three	一人だと思ったけど三人いた
+43	briefing	B에 둘 있을지도 모르는데 확실하진 않아	There might be two B, but I'm not sure	Bに二人いるかもしれないけど確信はない
+44	briefing	A 비었어 B로 로테하자	A is clear, rotate B	Aはクリア、Bにローテしよう
+45	briefing	오른쪽 말고 왼쪽 봐줘	Watch left, not right	右じゃなくて左を見て
+46	briefing	사이퍼 트랩 조심해	Watch out for Cypher's tripwire	サイファーのワイヤーに気をつけて
+47	briefing	천천히 해 아직 40초 남았어	Play slow, we still have 40 seconds	ゆっくりでいい、まだ40秒ある
+48	briefing	걔 원탭이야	He's one shot	そいつワンショット
+49	briefing	뒤도는 중이니까 조금만 버텨	I'm flanking, hold on a little longer	裏取り中だからもう少し耐えて
+50	briefing	B 메인 둘, 한 명은 오퍼고 다른 한 명은 딸피	Two B main, one has an Op and the other is low	Bメイン二人、一人はオペで、もう一人はロー
+51	social	안녕하세요	Hello	こんにちは
+52	social	잘 부탁드립니다	Nice to meet you, let's have a good game	よろしくお願いします
+53	social	고마워 덕분에 살았어	Thanks, you saved me	ありがとう、おかげで助かった
+54	social	미안 내 실수야	Sorry, my bad	ごめん、自分のミス
+55	social	괜찮아 다음 라운드 이기면 돼	It's okay, we can win the next round	大丈夫、次のラウンド勝てばいいよ
+56	social	나이스 샷 진짜 잘했다	Nice shot, well played	ナイスショット、本当にうまかった
+57	social	처음 하는 맵이라 길을 잘 몰라	It's my first time on this map, I don't know my way around	このマップ初めてだから道がよくわからない
+58	social	마이크가 안 돼서 채팅으로 할게	My mic isn't working, I'll use chat	マイク使えないからチャットで話すね
+59	social	한국어 조금 할 줄 알아?	Do you speak a little Korean?	韓国語少し話せる？
+60	social	일본어 잘 못해서 번역기 쓰고 있어	I don't speak Japanese well, I'm using a translator	日本語が苦手だから翻訳機を使ってる
+61	social	어느 서버에서 주로 해?	Which server do you usually play on?	普段どのサーバーで遊んでる？
+62	social	오늘 처음 이겼네 기분 좋다	My first win today, feels good	今日初めて勝てた、うれしい
+63	social	잠깐 화장실 좀 다녀올게	I'll be right back, bathroom break	ちょっとトイレ行ってくる
+64	social	이번 판 끝나고 밥 먹으러 갈 거야	I'm going to eat after this match	この試合が終わったらご飯食べに行く
+65	social	렉이 심해서 움직이기 힘들어	It's so laggy I can barely move	ラグがひどくて動きにくい
+66	social	일부러 그런 거 아니니까 화내지 마	I didn't do it on purpose, please don't get mad	わざとじゃないから怒らないで
+67	social	왜 자꾸 혼자 들어가? 같이 하자	Why do you keep going in alone? Let's play together	なんでいつも一人で入るの？一緒にやろう
+68	social	너 진짜 못한다 좀 조용히 해	You're terrible, just be quiet	本当に下手だな、ちょっと黙って
+69	social	장난이야 진심으로 한 말 아니야	I'm joking, I didn't mean it	冗談だよ、本気で言ったわけじゃない
+70	social	그건 칭찬이 아니라 비꼰 거였어	That was sarcasm, not a compliment	それは褒めたんじゃなくて皮肉だよ
+71	social	오늘 피곤해서 두 판만 하고 잘래	I'm tired today, I'll play two games and go to bed	今日は疲れたから二試合だけやって寝る
+72	social	같이 해줘서 고마워 다음에 또 하자	Thanks for playing with me, let's play again sometime	一緒に遊んでくれてありがとう、またやろう
+73	social	이 노래 제목 아는 사람 있어?	Does anyone know the name of this song?	この曲のタイトル知ってる人いる？
+74	social	내일 시험이라 오래 못 해	I have an exam tomorrow, I can't play for long	明日試験だから長くは遊べない
+75	social	내가 못한 건 맞는데 그렇게까지 욕할 필요는 없잖아	I know I played badly, but you don't have to insult me like that	下手だったのは認めるけど、そこまで悪口を言う必要はないでしょ
+76	social	방금 말한 건 너 말고 다른 사람한테 한 거야	What I just said was for someone else, not you	さっきのは君じゃなくて別の人に言ったんだ
+77	slang	좋은 시도였어	nt	ナイストライ
+78	slang	괜찮아 걱정 마	np dw	daijoubu shinpai shinaide
+79	prefix	(팀) 김데피: 왼쪽 둘	(Team) Kim: two left	(チーム) キム: 左に二人
+80	quoted	친구가 '왼쪽 조심해'라고 했어	My friend said 'watch left'	友達が「左に気をつけて」って言った

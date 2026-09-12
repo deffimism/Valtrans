@@ -31,16 +31,23 @@ public sealed partial class GlossaryService
             };
             return true;
         }
-        var clauses = Regex.Split(source, @"\s*[,、;]\s*");
-        if (clauses.Length != 2) return false;
+        const string count = "[1-5]|one|two|three|four|five|하나|둘|셋|넷|다섯|한|두|세|네|一|二|三|四|五";
+        var pairPattern = $@"(?:(?<count>{count})\s*(?:명|人)?\s+(?<direction>{direction})|(?<direction>{direction})(?:에|に)?\s*(?<count>{count})\s*(?:명|人)?)";
+        var full = Regex.Match(source, $@"^{pairPattern}\s*[,、;]?\s*{pairPattern}$", RegexOptions.IgnoreCase);
+        if (!full.Success) return false;
         var pairs = new List<(string Direction, int Count)>();
-        foreach (var clause in clauses)
+        for (var index = 0; index < 2; index++)
         {
-            var match = Regex.Match(clause,
-                $@"^(?:(?<count>[1-5])\s+(?<direction>{direction})|(?<direction>{direction})\s*(?<count>[1-5])\s*(?:명|人)?)$",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            if (!match.Success) return false;
-            pairs.Add((Key(match.Groups["direction"].Value), int.Parse(match.Groups["count"].Value)));
+            var number = full.Groups["count"].Captures[index].Value.ToLowerInvariant() switch
+            {
+                "one" or "한" or "하나" or "一" => 1,
+                "two" or "두" or "둘" or "二" => 2,
+                "three" or "세" or "셋" or "三" => 3,
+                "four" or "네" or "넷" or "四" => 4,
+                "five" or "다섯" or "五" => 5,
+                var numeric => int.Parse(numeric)
+            };
+            pairs.Add((Key(full.Groups["direction"].Captures[index].Value), number));
         }
         if (pairs[0].Direction == pairs[1].Direction) return false;
         translated = string.Join(", ", pairs.Select(p => target switch

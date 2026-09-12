@@ -11,9 +11,37 @@ public sealed class GameChatFilterService
 
     private readonly GlossaryService _glossary;
 
+    // Inflections and support/equipment calls must survive the receive filter,
+    // not only the translation test's All mode. Match phrases for ambiguous
+    // verbs (cover/retake) rather than treating every mention as a combat call.
+    private static readonly Regex AdditionalCombatTerms = new(
+        @"(?ix)\b(?:behind|footsteps?|planting|defusing|reloading|tripwires?)\b|" +
+        @"\b(?:cover|covering)\s+(?:me|you|him|her|them|us|our\s+team|my\s+team)\b|" +
+        @"\b(?:exact|remaining|full|low)\s+(?:hp|health)\b|\b\d+\s*hp\b|" +
+        @"(?<![ァ-ヶ])(?:ヒール|フルバイ|トラップ|ワイヤー)(?![ァ-ヶ])|" +
+        @"(?<![가-힣])(?:풀바이|트랩|발소리|엄호)(?=$|[\s,.!?]|하|할|해|좀|가|는|을|이|에)|" +
+        @"\b(?:hit|dealt|deal|take|took)\b[^\r\n.!?]{0,35}\b\d+\b|" +
+        @"(?:한테|에게)\s*\d+\s*(?:넣|맞)|に\s*\d+\s*(?:入れ|当て|くらっ)|" +
+        @"(?:밴달|팬텀|오퍼(?:레이터)?)[^\r\n.!?]{0,20}사\s*줄|" +
+        @"(?:ヴァンダル|ファントム|オペレーター)[^\r\n。！？]{0,20}買|" +
+        @"(?:라운드|ラウンド)[^\r\n.!?。！？]{0,15}(?:이기|勝)|\bwin\b[^\r\n.!?]{0,20}\brounds?\b|" +
+        @"\bplay\s+slow\b|천천히\s*해[^\r\n.!?]{0,20}\d+\s*초|ゆっくり[^\r\n。！？]{0,20}\d+\s*秒",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex RetakeAction = new(@"(?i)\bretak(?:e|ing)\b|리테이크|リテイク",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex RetakeNonGameContext = new(
+        @"(?i)\b(?:exam|test|photo|photograph|picture|class|course|driving|video)\b|시험|사진|재촬영|試験|写真|撮り直",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex PlayerHealthTerms = new(
+        @"(?ix)(?<![가-힣])(?:원탭|원샷|풀피)(?=$|[\s,.!?]|이|은|는|을|야|다|임|인|가|고|로|에|면|아니)|" +
+        @"(?<![ァ-ヶ])(?:ワンショット|フルHP|体力満タン)(?![ァ-ヶ])|\bfull\s+(?:hp|health)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private static readonly Regex TacticalTerms = new(
         @"(?ix)(?:\b(?:mid|main|site|heaven|hell|short|long|left|right|front|back|spawn|ct|rotate|rotating|push|rush|hold|peek|flank|plant|defuse|save|buy|eco|flash|smoke|molly|ult|heal|revive|rez|cracked|knocked|one\s*shot|low\s*hp|dmg|damage|help|wait|enemy|enemies|opponent|opponents)\b|" +
-        @"미드|메인|사이트|헤븐|숏|롱|왼쪽|오른쪽|앞|뒤|스폰|로테|합류|푸시|러시|막아|지켜|피킹?|플랭크|설치|해체|세이브|구매|플래시|연막|스모크|궁|힐|살려|부활|딸피|체력|데미지|도와|기다려|적|상대|" +
+        @"미드|메인|사이트|헤븐|숏|롱|왼쪽|오른쪽|앞|뒤|스폰|로테|합류|푸시|러시|막아|지켜|피킹|(?<![가-힣])피(?:가|는|은)?(?=$|\s*(?:[0-9]|없|남|낮|적|몇|얼마))|플랭크|설치|해체|세이브|구매|플래시|연막|스모크|(?<![가-힣])궁(?=$|\s|[,.!?]|극기|은|이|을|도|만|없|있|빠|썼|써)|힐|살려|부활|딸피|체력|데미지|도와|기다려|(?<![가-힣])적(?=$|\s|[,.!?0-9]|은|이|을|도|만|없|있)|상대|" +
         @"ミッド|メイン|サイト|ヘブン|ショート|ロング|左|右|前|後ろ|スポーン|ローテ|合流|プッシュ|ラッシュ|守って|ピーク|フランク|設置|解除|セーブ|購入|フラッシュ|スモーク|ウルト|回復|蘇生|ロー|ダメージ|助けて|待って|敵|相手|" +
         @"中路|短道|长道|天堂|地狱|残血|小|两个|后面|左边|右边|敌人|防守|进攻)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -27,10 +55,6 @@ public sealed class GameChatFilterService
         @"바보(?:야|냐)?|멍청(?:이|아)?|병신(?:아|이야)?|ㅂㅅ|꺼져|닥쳐|개못|못하네|트롤|쓰레기|" +
         @"ばか|バカ|アホ|下手くそ|黙れ|ゴミ|雑魚)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-    private static readonly Regex ClauseSeparator = new(
-        @"(?:[.!?。！？,，、;；]+|\s+(?:but|and|however|근데|그리고|하지만|그래도|でも|けど|しかし)\s+)",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public GameChatFilterService(GlossaryService glossary) => _glossary = glossary;
 
@@ -55,10 +79,9 @@ public sealed class GameChatFilterService
 
         if (tactical)
         {
-            var extracted = ExtractTacticalClauses(cleaned, settings);
-            return new ChatFilterResult(true, extracted, extracted.Equals(body, StringComparison.Ordinal)
-                ? "게임 콜아웃"
-                : "감정 표현 제거 · 콜아웃 추출", "Tactical");
+            // Select messages, not fragments. The other clause may contain the
+            // condition, speaker, negation or correction for the tactical clause.
+            return new ChatFilterResult(true, body, "게임 콜아웃 · 전체 문장 보존", "Tactical");
         }
         return new ChatFilterResult(true, cleaned, "짧은 인사·감사·사과", "Social");
     }
@@ -89,22 +112,11 @@ public sealed class GameChatFilterService
         _glossary.ContainsTacticalSlang(text, settings) ||
         _glossary.TryTranslateStructuredCallout(text, "EN", settings, out _) ||
         _glossary.ContainsKnownGameReference(text, settings) ||
-        TacticalTerms.IsMatch(text) || SiteLetter.IsMatch(text);
+        TacticalTerms.IsMatch(text) || PlayerHealthTerms.IsMatch(text) || SiteLetter.IsMatch(text) ||
+        AdditionalCombatTerms.IsMatch(text) || RetakeAction.IsMatch(text) && !RetakeNonGameContext.IsMatch(text);
 
     private bool IsSocial(string text, AppSettings settings) =>
         _glossary.TryTranslateExactShortcut(text, "EN", out _, settings);
-
-    private string ExtractTacticalClauses(string text, AppSettings settings)
-    {
-        var clauses = ClauseSeparator.Split(text)
-            .Select(clause => clause.Trim())
-            .Where(ChatTextSanitizer.HasMeaningfulContent)
-            .Where(clause => IsTactical(clause, settings))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(3)
-            .ToArray();
-        return clauses.Length == 0 ? text : string.Join(" / ", clauses);
-    }
 
     private static string CleanToxicNoise(string text)
     {

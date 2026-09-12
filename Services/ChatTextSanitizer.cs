@@ -119,6 +119,11 @@ public static class ChatTextSanitizer
     public static string ConvertCommonRomanizedJapanese(string text)
     {
         if (!LooksLikeRomanizedJapanese(text)) return text;
+        // Resolve the complete reassurance before individual words split it into
+        // a Japanese/romaji mixture that small translation models misinterpret.
+        if (Regex.IsMatch(text.Trim(), @"^daijou?bu\s*[,、]?\s*shinpai\s+shinaide[.!！。]?$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            return "大丈夫、心配しないで";
         foreach (var (romanized, japanese) in RomanizedJapaneseTerms)
             text = Regex.Replace(text, $@"\b{Regex.Escape(romanized)}\b", japanese,
                 RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);

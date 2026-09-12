@@ -620,7 +620,7 @@ public sealed record OcrReadResult(string Text, string DetectedLanguage, ulong F
     bool EnhancementUsed = false, double QualityScore = 0, double AverageWordHeight = 0,
     double RawQualityScore = 0, double EnhancedQualityScore = 0, bool ComparedVariants = false,
     double CaptureDurationMs = 0, double RecognitionDurationMs = 0, double EnhancementDurationMs = 0,
-    double TotalDurationMs = 0);
+    double TotalDurationMs = 0, int ImageWidth = 0, bool QualityScoreAvailable = true);
 
 public static class OcrEnhancementModes
 {

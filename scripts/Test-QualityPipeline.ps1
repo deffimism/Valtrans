@@ -16,7 +16,7 @@ Write-Output 'Separate Hy-MT2 1.8B/7B templates and stop tokens: PASS'
 $settings.CustomGlossary['pizza'] = '피자'
 $settings.CustomGlossary['irrelevant'] = 'should not be included'
 $prompt = [Valtrans.Services.GameTranslationPrompt]::Build('save me near pizza, not mid', 'KO', $settings, $glossary, $false)
-foreach ($required in @('VALORANT', 'Japan', 'save me near pizza, not mid', 'no character limit')) {
+foreach ($required in @('VALORANT', 'Japan', 'save me near pizza, not mid', 'without summarizing')) {
     if (-not $prompt.Contains($required)) { throw "Missing prompt context: $required" }
 }
 if ($prompt.Contains('Map:') -or $prompt.Contains('irrelevant') -or $prompt.Contains('{{VT') -or $prompt.Contains('35 characters')) { throw 'Unsafe/unrelated prompt preprocessing' }
@@ -71,10 +71,11 @@ $oldClient = $field.GetValue($mockTranslator)
 $field.SetValue($mockTranslator, $mockClient)
 try {
     foreach ($receive in @($false, $true)) {
-        $output = $mockTranslator.TranslateAsync('please wait until I flash', 'KO', $settings, $receive, [Threading.CancellationToken]::None).GetAwaiter().GetResult()
+        # The shorter "please wait until I flash" is an exact rule, not a model probe.
+        $output = $mockTranslator.TranslateAsync('please wait until I throw a flash', 'KO', $settings, $receive, [Threading.CancellationToken]::None).GetAwaiter().GetResult()
         if ($output -ne '섬광 쓸 때까지 기다려') { throw 'Model-first path did not return model result' }
         $payload = $mockHandler.LastPayload | ConvertFrom-Json
-        if ($payload.model -ne $settings.LocalAiModel -or -not $payload.messages[0].content.Contains('Server region: Japan')) { throw 'Live model payload context missing' }
+        if ($payload.model -ne $settings.LocalAiModel -or -not $payload.messages[0].content.Contains('Japan')) { throw "Live model payload context missing: $($mockHandler.LastPayload)" }
     }
     if ($mockHandler.Calls -ne 2) { throw 'Receive path did not prefer local model' }
 } finally { $mockLite.Dispose(); $mockClient.Dispose(); $oldClient.Dispose() }

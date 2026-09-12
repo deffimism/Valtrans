@@ -27,6 +27,22 @@ public sealed partial class GlossaryService
         }
         foreach (var pair in settings.CustomGlossary.OrderByDescending(p => p.Key.Length))
             Add(pair.Key, pair.Value, "user terminology");
+        // Keep the site letter bound to its area. A lone Main -> 메인 hint was
+        // losing B in multi-player calls. Never rewrite the input itself.
+        foreach (Match match in Regex.Matches(source,
+            @"(?<![A-Za-z0-9_])(?<site>[ABC])\s*(?<area>(?i:main|heaven|hell|short|long|mid|site)|메인|헤븐|헬|숏|롱|미드|사이트|メイン|ヘブン|ヘル|ショート|ロング|ミッド|サイト)(?![A-Za-z])"))
+        {
+            if (Regex.IsMatch(source[(match.Index + match.Length)..],
+                @"(?i)^\s+(?:reason|thing|point|goal|character|menu|story|time|break|answer|walk|distance)\b")) continue;
+            var place = NormalizeCalloutLocation(match.Value, settings);
+            Add(match.Value, LocalizeCalloutLocation(place, target, settings), "possible location; site and area together");
+        }
+        // Single letters are not general glossary keys: a keyboard key, grade or
+        // nickname must not become a site. Only explicit spatial constructions
+        // and common 'there are enemies B' FPS ellipsis supply that context.
+        foreach (Match match in Regex.Matches(source,
+            @"(?<![A-Za-z0-9_])(?<site>[ABC])(?=에|엔|에서|쪽|には|に)|(?i:\b(?:at|on|towards?|site)\s+)(?<site>[ABC])\b|(?i:\bthere\s+(?:is|are|was|were)\b[^\r\n,.!?]{0,40}\b(?:enemy|enemies|teammates?)\s+)(?<site>[ABC])(?=$|[\s,.!?])"))
+            Add(match.Groups["site"].Value, match.Groups["site"].Value, "possible location; site label, not a person");
         foreach (var pair in ProperNames) Add(pair.Key, pair.Value, "proper name");
         foreach (var name in ProperNames.Values.Distinct()) Add(name, name, "proper name; keep spelling");
         foreach (var pair in SelectedLocations(settings))

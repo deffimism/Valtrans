@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Valtrans.Models;
 using Valtrans.Services;
@@ -15,7 +16,7 @@ if (options.ShowHelp)
     Console.WriteLine("""
         Valtrans.TestRunner --scenario <path> [--seed 20260910] [--timeout 180]
             [--ocr-engine Windows|Paddle|Fast|Hybrid] [--no-focus-arena]
-            [--baseline-output <path>] [--output <path>]
+            [--baseline-output <path>] [--output <path>] [--app-exe <packaged Valtrans.exe>]
 
         Valtrans.TestRunner --compare-baseline <path> --current-baseline <path>
 
@@ -43,12 +44,19 @@ if (options.CompareMode)
 
 var workspace = WorkspacePaths.Root;
 var arenaExe = Path.Combine(workspace, "test/TestArena/bin/Release/net10.0-windows10.0.26100.0/Valtrans.TestArena.exe");
-var valtransExe = Path.Combine(workspace, "bin/Release/net10.0-windows10.0.26100.0/Valtrans.exe");
-if (!File.Exists(arenaExe) || !File.Exists(valtransExe))
+var valtransExe = options.AppExecutable ?? Path.Combine(workspace, "bin/Release/net10.0-windows10.0.26100.0/Valtrans.exe");
+var appDll = Path.Combine(Path.GetDirectoryName(valtransExe)!, "Valtrans.dll");
+if (!File.Exists(arenaExe) || !File.Exists(valtransExe) || !File.Exists(appDll))
 {
     Console.Error.WriteLine("Build outputs missing. Run: dotnet build -c Release");
     return 2;
 }
+options = options with
+{
+    AppExecutable = valtransExe,
+    AppAssemblySha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(appDll))),
+    AppVersion = FileVersionInfo.GetVersionInfo(appDll).ProductVersion
+};
 
 var runDir = Path.Combine(Path.GetTempPath(), "valtrans-e2e", Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(runDir);
@@ -152,7 +160,7 @@ if (valtransReport is not null && !string.IsNullOrWhiteSpace(options.BaselineOut
         var scenario = TestScenarioFile.Load(options.ScenarioPath);
         var traces = MessageTraceService.ReadFromLog(null, 200);
         baseline = BaselineReportService.Build(valtransReport, scenario, options.OcrEngine, options.Seed,
-            version: "v0.3.0", traces: traces);
+            version: options.AppVersion ?? "unknown", traces: traces);
         BaselineReportService.Write(options.BaselineOutputPath, baseline);
     }
     catch (Exception ex)
@@ -187,6 +195,9 @@ static async Task WriteRunnerReport(string path, RunnerOptions options, string s
         scenario = options.ScenarioPath,
         seed = options.Seed,
         ocrEngine = options.OcrEngine,
+        appExecutable = options.AppExecutable,
+        appAssemblySha256 = options.AppAssemblySha256,
+        appVersion = options.AppVersion,
         detail,
         baselinePath = options.BaselineOutputPath,
         baseline,
@@ -256,6 +267,10 @@ internal sealed record RunnerOptions(
     string? BaselineComparePath,
     string? CurrentBaselinePath)
 {
+    public string? AppExecutable { get; init; }
+    public string? AppAssemblySha256 { get; init; }
+    public string? AppVersion { get; init; }
+
     public static RunnerOptions Parse(string[] args)
     {
         var scenario = "";
@@ -267,6 +282,7 @@ internal sealed record RunnerOptions(
         string? baseline = null;
         string? baselineCompare = null;
         string? currentBaseline = null;
+        string? appExecutable = null;
         for (var index = 0; index < args.Length; index++)
         {
             switch (args[index])
@@ -276,6 +292,9 @@ internal sealed record RunnerOptions(
                     return new RunnerOptions(true, false, false, "", seed, timeout, ocrEngine, null, null, null, null);
                 case "--no-focus-arena":
                     skipArenaFocus = true;
+                    break;
+                case "--app-exe":
+                    appExecutable = Path.GetFullPath(args[++index]);
                     break;
                 case "--compare-baseline":
                     baselineCompare = Path.GetFullPath(args[++index]);
@@ -312,7 +331,10 @@ internal sealed record RunnerOptions(
         }
         if (string.IsNullOrWhiteSpace(scenario))
             scenario = Path.Combine(WorkspacePaths.Root, "testdata/scenarios/smoke_basic_001.json");
-        return new RunnerOptions(false, false, skipArenaFocus, scenario, seed, timeout, ocrEngine, output, baseline, null, null);
+        return new RunnerOptions(false, false, skipArenaFocus, scenario, seed, timeout, ocrEngine, output, baseline, null, null)
+        {
+            AppExecutable = appExecutable
+        };
     }
 }
 

@@ -273,8 +273,8 @@
             <Grid Margin="0,15,0,0">
               <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition/></Grid.ColumnDefinitions>
               <TextBlock Text="사용할 번역 방식" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center"/>
-              <ComboBox x:Name="TranslationProviderCombo" Grid.Column="1" SelectionChanged="TranslationProvider_OnSelectionChanged" ToolTip="처음에는 스마트 복합을 권장합니다. 두 로컬 엔진 중 준비된 경로로 자동 전환합니다.">
-                <ComboBoxItem Tag="Hybrid"><TextBlock Style="{StaticResource ComboText}" Text="무료 로컬 · AI 우선 + Lite 대체 · 기본값"/></ComboBoxItem>
+              <ComboBox x:Name="TranslationProviderCombo" Grid.Column="1" SelectionChanged="TranslationProvider_OnSelectionChanged" ToolTip="스마트 복합은 검증된 짧은 콜을 사전으로, 그 외 문장을 선택한 로컬 AI로 번역합니다. AI 실패 시 번역을 보류하며 Lite 설치는 필요하지 않습니다.">
+                <ComboBoxItem Tag="Hybrid"><TextBlock Style="{StaticResource ComboText}" Text="스마트 복합 · 사전 + 로컬 AI · 기본값"/></ComboBoxItem>
                 <ComboBoxItem Tag="Lite"><TextBlock Style="{StaticResource ComboText}" Text="Valtrans Lite · 무료 오프라인 · CPU"/></ComboBoxItem>
                 <ComboBoxItem Tag="Ollama"><TextBlock Style="{StaticResource ComboText}" Text="로컬 AI · Hy-MT2 / Qwen / TranslateGemma"/></ComboBoxItem>
               </ComboBox>
@@ -298,7 +298,7 @@
               <StackPanel>
                 <TextBlock Text="무료 로컬 번역 · 기본값" FontWeight="Bold" FontSize="14"/>
                 <TextBlock Text="API 키·Docker·WSL 불필요 · 최초 엔진 다운로드 후 채팅은 PC 안에서만 처리" Foreground="#586A82" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                <TextBlock Text="보내기·받기 모두 선택한 AI 우선 · 확실한 콜은 사전 처리 · AI 실패 시 Lite 대체 (품질 보장 아님)" Foreground="#586A82" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                <TextBlock Text="검증된 짧은 콜은 사전 처리 · 그 외 문장은 선택한 AI로 번역 · AI 실패 시 번역 보류 · Lite 설치 불필요" Foreground="#586A82" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap"/>
                 <Border Background="#F8FAFD" CornerRadius="8" Padding="9" Margin="0,10,0,0">
                   <TextBlock x:Name="HybridRouteStatusText" Text="최근 처리 경로가 여기에 표시됩니다" Foreground="#586A82" FontSize="12" TextWrapping="Wrap"/>
                 </Border>
@@ -517,7 +517,7 @@
                 <StackPanel>
                   <TextBlock Text="1 · 권장 엔진" Foreground="#4F46E5" FontSize="12" FontWeight="SemiBold"/>
                   <TextBlock Text="스마트 복합" FontSize="13" FontWeight="Bold" Margin="0,5,0,0"/>
-                  <TextBlock Text="Hy-MT2 + Lite 자동 전환" Foreground="#586A82" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                  <TextBlock Text="검증된 콜 사전 + Hy-MT2" Foreground="#586A82" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap"/>
                   <TextBlock x:Name="GuideEngineStateText" Text="확인 중" Foreground="#9A5B0A" FontSize="12" Margin="0,9,0,0"/>
                 </StackPanel>
               </Border>
@@ -525,14 +525,14 @@
                 <StackPanel>
                   <TextBlock Text="2 · 번역 준비" Foreground="#4F46E5" FontSize="12" FontWeight="SemiBold"/>
                   <TextBlock Text="로컬 모델 설치" FontSize="13" FontWeight="Bold" Margin="0,5,0,0"/>
-                  <TextBlock Text="약 1.6GB · 외부 전송 없음" Foreground="#586A82" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                  <TextBlock x:Name="GuideModelSizeText" Text="선택한 엔진 확인 중" Foreground="#586A82" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap"/>
                   <TextBlock x:Name="GuideModelStateText" Text="확인 중" Foreground="#9A5B0A" FontSize="12" Margin="0,9,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
               </Border>
               <Border Grid.Row="2" Grid.Column="0" Background="#F8FAFD" BorderBrush="#E0E6F0" BorderThickness="1" CornerRadius="11" Padding="12">
                 <StackPanel>
                   <TextBlock Text="3 · OCR 준비" Foreground="#4F46E5" FontSize="12" FontWeight="SemiBold"/>
-                  <TextBlock Text="PaddleOCR-VL" FontSize="13" FontWeight="Bold" Margin="0,5,0,0"/>
+                  <TextBlock x:Name="GuideOcrEngineText" Text="선택한 OCR 엔진" FontSize="13" FontWeight="Bold" Margin="0,5,0,0"/>
                   <TextBlock Text="설치부터 모델 준비까지 여기서 진행" Foreground="#586A82" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap"/>
                   <TextBlock x:Name="GuideLanguageStateText" Text="OCR 준비 확인 중" Foreground="#9A5B0A" FontSize="12" Margin="0,9,0,0" TextWrapping="Wrap"/>
                   <WrapPanel Margin="0,10,0,0">

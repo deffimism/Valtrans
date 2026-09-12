@@ -185,7 +185,7 @@ public sealed class PaddleOcrService : IDisposable
                     throw new TimeoutException("Paddle OCR이 제한 시간 안에 읽지 못했습니다. 최신 1줄 모드·영역 표시를 확인하거나 Windows OCR을 시도하세요.");
                 var ms = root.GetProperty("milliseconds").GetDouble();
                 return new OcrReadResult(text, "MIXED",
-                    RecognitionDurationMs: ms, TotalDurationMs: ms);
+                    RecognitionDurationMs: ms, TotalDurationMs: ms, QualityScoreAvailable: false);
             }
             catch (OperationCanceledException) when (!token.IsCancellationRequested)
             {

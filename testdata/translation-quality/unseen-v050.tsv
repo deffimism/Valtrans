@@ -1,0 +1,33 @@
+id	category	ko	en	jp
+201	briefing	적 셋이 A 메인 지키고 있어	Three enemies are holding A main	敵三人がAメインを守ってる
+202	briefing	B에 적 한 명인 줄 알았는데 팀원이었어	I thought there was an enemy B, but it was a teammate	Bに敵が一人いると思ったけど味方だった
+203	briefing	스파이크 C 롱에 떨어졌어	Spike dropped C long	スパイクがCロングに落ちてる
+204	briefing	네 명인 줄 알았는데 두 명이었어	I thought there were four people, but there were two	四人だと思ったけど二人だった
+205	briefing	내가 죽어도 아직 피킹하지 마	Don't peek yet even if I die	自分が死んでもまだピークしないで
+206	briefing	너 먼저 들어가면 내가 뒤에서 엄호할게	If you go in first, I'll cover you from behind	君が先に入ったら自分が後ろからカバーする
+207	briefing	왼쪽에 하나라고 했지 오른쪽에 둘이라고 안 했어	I said one on the left, not two on the right	左に一人と言ったんだ、右に二人とは言ってない
+208	briefing	적이 아니라 우리 세이지 발소리였어	Those footsteps were our Sage, not an enemy	あの足音は敵じゃなくて味方のセージだった
+209	briefing	체력 12 남았고 힐은 7초 뒤에 돼	I have 12 HP left and my heal is ready in 7 seconds	HPは残り12で、ヒールはあと7秒で使える
+210	briefing	나 4100 있는데 팬텀 사줄까?	I have 4100, should I buy you a Phantom?	4100あるけどファントム買ってあげようか？
+211	briefing	내가 오퍼 들고 있는 게 아니라 상대가 들고 있어	It's the enemy holding an Operator, not me	オペレーターを持ってるのは自分じゃなくて相手だ
+212	briefing	아마 C 롱에 넷 있을지도 모르는데 확실하지 않아	There may be four C long, but I'm not sure	Cロングに四人いるかもしれないけど確信はない
+213	briefing	스파이크 설치하는 척만 하고 빠지자	Let's fake planting the spike and fall back	スパイクを設置するふりだけして下がろう
+214	briefing	이번에는 무기 세이브 말고 같이 리테이크하자	Let's retake together this time instead of saving our weapons	今回は武器をセーブせずに一緒にリテイクしよう
+215	briefing	라운드 두 번만 더 이기면 돼	We only need to win two more rounds	あと二ラウンド勝てばいい
+216	briefing	제트가 아니라 레이나한테 120 넣었어	I hit Reyna for 120, not Jett	ジェットじゃなくてレイナに120入れた
+217	social	한 판 더 하고 자려고 했는데 너무 피곤해서 지금 끌게	I was going to play one more game and sleep, but I'm too tired so I'll quit now	もう一試合やって寝るつもりだったけど疲れすぎたから今やめるね
+218	social	두 판이 아니라 라운드 두 번만 더 하자는 뜻이야	I meant two more rounds, not two more matches	あと二試合じゃなくて二ラウンドやろうって意味だよ
+219	social	마이크 꺼져 있었네 못 들었으면 다시 말해줄게	My mic was muted. I'll say it again if you didn't hear me	マイクがミュートだったね、聞こえなかったならもう一度言うよ
+220	social	내 말은 너한테 한 게 아니라 채팅에 욕한 사람한테 한 거야	I was talking to the person swearing in chat, not you	君じゃなくてチャットで暴言を吐いた人に言ったんだ
+221	social	잘했다고 한 건 진심이야 비꼰 게 아니야	I meant it when I said you did well. I wasn't being sarcastic	上手だったって言ったのは本心だよ、皮肉じゃない
+222	social	졌어도 재밌었어 다음에 또 같이 하자	Even though we lost, it was fun. Let's play together again sometime	負けたけど楽しかったよ、また一緒にやろう
+223	social	오늘은 못하지만 내일 저녁에는 할 수 있어	I can't play today, but I can tomorrow evening	今日はできないけど明日の夜ならできるよ
+224	social	게임 소리 말고 네 마이크 소리를 조금만 키워줘	Please turn up your microphone a little, not the game audio	ゲーム音じゃなくてマイクの音量を少し上げて
+225	social	일본어는 읽을 수 있는데 말하는 건 아직 어려워	I can read Japanese, but speaking it is still hard	日本語は読めるけど話すのはまだ難しい
+226	social	잠깐만 택배가 와서 문 좀 열고 올게	One second, my delivery is here. I'll go answer the door	ちょっと待って、荷物が届いたから玄関に行ってくる
+227	social	인터넷이 끊겨서 나간 거야 일부러 탈주한 건 아니야	My internet disconnected. I didn't leave on purpose	回線が切れたんだ、わざと抜けたわけじゃない
+228	social	번역기가 틀렸나 봐 내가 그런 뜻으로 말한 게 아닌데	The translator seems to have got it wrong. That's not what I meant	翻訳が間違ったみたい、そういう意味で言ったんじゃないのに
+229	slang	한번 해볼 만했어 다음엔 될 거야	nt, you'll get it next time	ナイストライ、次はいけるよ
+230	slang	내 실수야 괜찮으면 한 번 더 해보자	mb, wanna give it another try?	自分のミス、よかったらもう一回やろう
+231	quoted	친구가 '둘인 줄 알았는데 셋이었어'라고 했어	My friend said, 'I thought there were two, but there were three'	友達が「二人だと思ったけど三人だった」と言った
+232	quoted	'왼쪽 조심해'라는 말을 일본어로 어떻게 해?	How do you say 'watch left' in Japanese?	「左に気をつけて」は日本語でどう言うの？

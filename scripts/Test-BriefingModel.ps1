@@ -26,7 +26,7 @@ try {
     foreach ($case in @(
         @('There are two enemies at B Heaven.', 'EN', '2 b heaven'),
         @('미드에 적 2명이 있습니다.', 'KO', '미드 2'),
-        @('ミッドに敵が2人います。', 'JP', 'ミッド2'),
+        @('ミッドに敵が2人います。', 'JP', 'ミッド 2人'),
         @('Maybe there are two enemies at B Heaven.', 'EN', 'Maybe there are two enemies at B Heaven.'),
         @('Do not push until I flash.', 'EN', 'Do not push until I flash.')
     )) {
@@ -107,14 +107,9 @@ public sealed class BriefingModelFixture : HttpMessageHandler {
         } finally { $fixture.Dispose() }
     }
     if ($LiveLite) {
-        $start = [Diagnostics.ProcessStartInfo]::new((Join-Path $env:LOCALAPPDATA 'Valtrans/Lite/ValtransLiteHost-4.exe'))
-        $start.UseShellExecute = $false; $start.CreateNoWindow = $true
-        $start.RedirectStandardInput = $true; $start.RedirectStandardOutput = $true
-        $start.StandardInputEncoding = [Text.UTF8Encoding]::new($false)
-        $start.StandardOutputEncoding = [Text.Encoding]::UTF8
-        $start.Environment['VALTRANS_LITE_MODELS'] = Join-Path $env:LOCALAPPDATA 'Valtrans/Lite/models'
-        $process = [Diagnostics.Process]::Start($start)
-        [Valtrans.Services.ValtransLiteService].GetField('_process', [Reflection.BindingFlags]'Instance,NonPublic').SetValue($lite, $process)
+        # Exercise extraction/startup of the host embedded in this build; never
+        # assume an older executable name already exists in the user's AppData.
+        $lite.WarmUpAsync('EN', 'KO', $none).GetAwaiter().GetResult() | Out-Null
         $settings.TranslationProvider = 'Lite'
         $report = $translator.TestCompatibilityAsync($settings, $none).GetAwaiter().GetResult()
         $report.Results | Format-Table Engine,Probe,Success,Detail

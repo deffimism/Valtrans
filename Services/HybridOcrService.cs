@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Valtrans.Models;
 
 namespace Valtrans.Services;
@@ -10,8 +11,8 @@ namespace Valtrans.Services;
 /// Re-read a narrow latest-line crop when the full-region Fast read is not accepted.
 /// </param>
 /// <param name="AllowVlFallback">
-/// Consult PaddleOCR-VL when Fast never reaches the accept threshold. Disabled under
-/// Test Arena E2E: Fast and VL share one GPU and loading both stalls the run.
+/// Consult PaddleOCR-VL when Fast never reaches the accept threshold. Production
+/// and Test Arena E2E both enable this stage; FastOnly is for isolated unit probes.
 /// </param>
 public sealed record HybridOcrOptions(bool AllowLatestLineRetry, bool AllowVlFallback)
 {
@@ -20,7 +21,8 @@ public sealed record HybridOcrOptions(bool AllowLatestLineRetry, bool AllowVlFal
 }
 
 /// <summary>Result of a hybrid read plus which stage produced it, for tracing and UX.</summary>
-public sealed record HybridOcrRead(OcrReadResult Result, string Stage);
+public sealed record HybridOcrRead(OcrReadResult Result, string Stage, HybridOcrTimings? Timings = null);
+public sealed record HybridOcrTimings(double FastMs, double RetryMs, double VlMs, double TotalMs);
 
 /// <summary>Phase 4: Fast OCR first, PaddleOCR-VL fallback when confidence/plausibility is low.</summary>
 public sealed class HybridOcrService
@@ -29,6 +31,7 @@ public sealed class HybridOcrService
     public const string StageFastLatestLine = "fast-latest";
     public const string StageVlFallback = "vl-fallback";
     public const string StageFastUnverified = "fast-unverified";
+    public const string StageFastAfterVl = "fast-after-vl";
 
     private readonly FastOcrService _fast;
     private readonly PaddleOcrService _paddle;
@@ -73,25 +76,40 @@ public sealed class HybridOcrService
         HybridOcrOptions options,
         CancellationToken token)
     {
-        var fast = await _fast.ReadAsync(png, fastRuntime, token);
+        var elapsed = Stopwatch.StartNew();
+        double fastMs = 0, retryMs = 0, vlMs = 0;
+        // Count every attempted stage, not only the chosen candidate's latency.
+        HybridOcrRead Finish(OcrReadResult result, string stage)
+        {
+            var duration = elapsed.Elapsed.TotalMilliseconds;
+            return Accept(result with { RecognitionDurationMs = duration, TotalDurationMs = duration }, stage)
+                with { Timings = new HybridOcrTimings(fastMs, retryMs, vlMs, duration) };
+        }
+        var fast = await _fast.ReadAsync(png, fastRuntime, token, settings.OcrLanguages, settings.Game);
+        fastMs = elapsed.Elapsed.TotalMilliseconds;
         if (OcrCandidateResolver.MeetsHybridFastAccept(fast, glossary, settings))
-            return Accept(fast, StageFastFullRegion);
+            return Finish(fast, StageFastFullRegion);
 
         if (options.AllowLatestLineRetry && latestLinePng is { Length: > 0 })
         {
-            var latestFast = await _fast.ReadAsync(latestLinePng, fastRuntime, token);
+            var retryStart = elapsed.Elapsed.TotalMilliseconds;
+            var latestFast = await _fast.ReadAsync(latestLinePng, fastRuntime, token, settings.OcrLanguages, settings.Game);
+            retryMs = elapsed.Elapsed.TotalMilliseconds - retryStart;
             if (OcrCandidateResolver.MeetsHybridFastAccept(latestFast, glossary, settings))
-                return Accept(latestFast, StageFastLatestLine);
+                return Finish(latestFast, StageFastLatestLine);
             fast = OcrCandidateResolver.Choose(fast, latestFast, glossary, settings);
             if (OcrCandidateResolver.MeetsHybridFastAccept(fast, glossary, settings))
-                return Accept(fast, StageFastLatestLine);
+                return Finish(fast, StageFastLatestLine);
         }
 
         if (!options.AllowVlFallback)
-            return Accept(fast, StageFastUnverified);
+            return Finish(fast, StageFastUnverified);
 
+        var vlStart = elapsed.Elapsed.TotalMilliseconds;
         var vl = await _paddle.ReadAsync(latestLinePng ?? png, paddleRuntime, token);
-        return Accept(OcrCandidateResolver.Choose(fast, vl, glossary, settings), StageVlFallback);
+        vlMs = elapsed.Elapsed.TotalMilliseconds - vlStart;
+        var chosen = OcrCandidateResolver.Choose(fast, vl, glossary, settings);
+        return Finish(chosen, ReferenceEquals(chosen, vl) ? StageVlFallback : StageFastAfterVl);
     }
 
     private HybridOcrRead Accept(OcrReadResult result, string stage)

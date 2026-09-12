@@ -147,7 +147,8 @@ public sealed class FastOcrService : IDisposable
         catch { Stop(); throw; }
     }
 
-    public async Task<OcrReadResult> ReadAsync(byte[] png, string runtime, CancellationToken token)
+    public async Task<OcrReadResult> ReadAsync(byte[] png, string runtime, CancellationToken token,
+        IReadOnlyCollection<string>? languages = null, string? game = null)
     {
         if (png.Length > 8_000_000) throw new ArgumentException("OCR 영역이 너무 큽니다.");
         await _gate.WaitAsync(token);
@@ -158,7 +159,7 @@ public sealed class FastOcrService : IDisposable
             var id = Guid.NewGuid().ToString("N");
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
             deadline.CancelAfter(TimeSpan.FromSeconds(45));
-            var request = JsonSerializer.Serialize(new { id, png = Convert.ToBase64String(png) });
+            var request = JsonSerializer.Serialize(new { id, png = Convert.ToBase64String(png), languages, game });
             try
             {
                 await process.StandardInput.WriteLineAsync(request.AsMemory(), deadline.Token);
@@ -175,12 +176,40 @@ public sealed class FastOcrService : IDisposable
                 var confidence = root.TryGetProperty("confidence", out var confidenceNode)
                     ? confidenceNode.GetDouble()
                     : EstimateConfidence(text);
-                return new OcrReadResult(text, "MIXED", QualityScore: confidence,
-                    RecognitionDurationMs: ms, TotalDurationMs: ms);
+                return ParseRecognition(root, text, confidence, ms);
             }
             catch { Stop(); throw; }
         }
         finally { _gate.Release(); }
+    }
+
+    public static OcrReadResult ParseRecognition(JsonElement root, string text, double confidence, double ms)
+    {
+        var lines = new List<OcrPositionedLine>();
+        var geometryValid = true;
+        if (root.TryGetProperty("lines", out var rows) && rows.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var row in rows.EnumerateArray())
+            {
+                if (row.ValueKind != JsonValueKind.Object ||
+                    !row.TryGetProperty("box", out var box) || box.ValueKind != JsonValueKind.Array ||
+                    box.GetArrayLength() != 4 || !row.TryGetProperty("text", out var value) ||
+                    value.ValueKind != JsonValueKind.String) { geometryValid = false; break; }
+                var coordinates = new int[4];
+                var valid = true;
+                for (var i = 0; i < 4; i++) valid &= box[i].ValueKind == JsonValueKind.Number &&
+                    box[i].TryGetInt32(out coordinates[i]);
+                if (!valid || coordinates.Any(n => n < 0 || n > 100000) ||
+                    coordinates[2] <= coordinates[0] || coordinates[3] <= coordinates[1]) { geometryValid = false; break; }
+                lines.Add(new OcrPositionedLine(value.GetString() ?? "", coordinates[0], coordinates[1],
+                    coordinates[2] - coordinates[0], coordinates[3] - coordinates[1], Array.Empty<OcrPositionedWord>()));
+            }
+        }
+        var width = root.TryGetProperty("imageWidth", out var widthNode) && widthNode.ValueKind == JsonValueKind.Number &&
+            widthNode.TryGetInt32(out var w)
+            && w > 0 && w <= 100000 ? w : 0;
+        return new OcrReadResult(text, "MIXED", PositionedLines: geometryValid && lines.Count > 0 ? lines : null,
+            QualityScore: confidence, RecognitionDurationMs: ms, TotalDurationMs: ms, ImageWidth: width);
     }
 
     private static string Error(JsonElement root) => root.TryGetProperty("error", out var value)

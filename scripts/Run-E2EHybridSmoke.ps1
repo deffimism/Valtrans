@@ -16,8 +16,11 @@ if (-not (Test-Path -LiteralPath $fastMarker) -or -not (Test-Path -LiteralPath $
     exit 0
 }
 dotnet build "$root/Valtrans.csproj" -c Release | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Build failed: Valtrans.csproj (exit $LASTEXITCODE)" }
 dotnet build "$root/test/TestArena/Valtrans.TestArena.csproj" -c Release | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Build failed: test/TestArena/Valtrans.TestArena.csproj (exit $LASTEXITCODE)" }
 dotnet build "$root/test/TestRunner/Valtrans.TestRunner.csproj" -c Release | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Build failed: test/TestRunner/Valtrans.TestRunner.csproj (exit $LASTEXITCODE)" }
 $runner = Get-ValtransTestRunner -Root $root
 $args = @(
     '--scenario', (Resolve-Path -LiteralPath $Scenario),

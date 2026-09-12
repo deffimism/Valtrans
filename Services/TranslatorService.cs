@@ -9,7 +9,7 @@ namespace Valtrans.Services;
 
 public sealed class TranslatorService
 {
-    private readonly HttpClient _localHttp = new() { Timeout = TimeSpan.FromMinutes(2) };
+    private readonly HttpClient _localHttp;
     private readonly GlossaryService _glossary;
     private readonly LocalAiService _localAi;
     private readonly ValtransLiteService _lite;
@@ -20,7 +20,14 @@ public sealed class TranslatorService
     public LitePivotMetrics? LastLitePivotMetrics { get; private set; }
 
     public TranslatorService(GlossaryService glossary, LocalAiService localAi, ValtransLiteService lite)
+        : this(glossary, localAi, lite, new HttpClient { Timeout = TimeSpan.FromMinutes(2) })
     {
+    }
+
+    internal TranslatorService(GlossaryService glossary, LocalAiService localAi, ValtransLiteService lite,
+        HttpClient localHttp)
+    {
+        _localHttp = localHttp;
         _glossary = glossary;
         _localAi = localAi;
         _lite = lite;
@@ -30,6 +37,7 @@ public sealed class TranslatorService
         bool preserveLines = false, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        settings = settings.SnapshotForTranslation();
         text = text.Trim();
         if (text.Length == 0) return text;
         text = preserveLines && text.Contains('\n')
@@ -65,6 +73,7 @@ public sealed class TranslatorService
         else
             throw new InvalidOperationException("지원하지 않는 번역 엔진입니다. 무료 로컬 엔진을 선택해 주세요.");
 
+        TranslationOutputGuard.Validate(text, result);
         result = BriefingTranslationGuard.CompactCommonCallout(result, targetLanguage);
         var guarded = TranslationFactGuard.Apply(text, result, targetLanguage, settings, _glossary);
         if (guarded.Adjusted)
@@ -72,14 +81,24 @@ public sealed class TranslatorService
             try { TranslationSafetyAdjusted?.Invoke(this, new TranslationSafetyEventArgs(guarded.Reason)); }
             catch { }
         }
+        ValidateFinalResult(text, guarded.Text, settings);
         return guarded.Text;
+    }
+
+    internal void ValidateFinalResult(string source, string translated, AppSettings settings)
+    {
+        TranslationOutputGuard.Validate(source, translated);
+        var type = new MessageClassifierService(new GameChatFilterService(_glossary)).Classify(source, settings).Type;
+        var validation = CriticalFactValidator.Validate(source, translated, type);
+        if (!validation.Passed)
+            throw new InvalidOperationException($"번역 의미 확인 필요 · {validation.Code} · 원문을 유지했습니다.");
     }
 
     public async Task<EngineCompatibilityReport> TestCompatibilityAsync(AppSettings settings,
         CancellationToken cancellationToken = default)
     {
         var engines = settings.TranslationProvider.Equals("Hybrid", StringComparison.OrdinalIgnoreCase)
-            ? new[] { "Lite", "Ollama" }
+            ? new[] { "Ollama" }
             : new[] { settings.TranslationProvider };
         var probes = new[]
         {
@@ -103,6 +122,7 @@ public sealed class TranslatorService
                     var briefingGuarded = BriefingTranslationGuard.CompactCommonCallout(raw, probe.TargetLanguage);
                     var factGuarded = TranslationFactGuard.Apply(probe.Source, briefingGuarded,
                         probe.TargetLanguage, settings, _glossary);
+                    ValidateFinalResult(probe.Source, factGuarded.Text, settings);
                     var adjusted = factGuarded.Adjusted ||
                                    !NormalizeForComparison(raw).Equals(NormalizeForComparison(briefingGuarded),
                                        StringComparison.OrdinalIgnoreCase);
@@ -247,7 +267,8 @@ public sealed class TranslatorService
         return string.Join(Environment.NewLine, output);
     }
 
-    // Rules first, then the local translation model, then Valtrans Lite as a fallback.
+    // Verified complete phrases are resolved before the model. Unrestricted Lite
+    // free text is not a safe fallback: structural validators cannot prove meaning.
     private async Task<string> TranslateHybridLineAsync(string text, string targetLanguage, AppSettings settings,
         CancellationToken cancellationToken)
     {
@@ -265,9 +286,6 @@ public sealed class TranslatorService
 
         var localModel = LocalAiService.NormalizeModelName(settings.LocalAiModel);
         var localDisplayName = LocalAiService.GetModel(localModel).DisplayName.Split('·')[0].Trim();
-        Exception? localError = null;
-        Exception? liteError = null;
-
         try
         {
             var result = await TranslateWithChatModelAsync(text, targetLanguage, settings, false,
@@ -277,22 +295,10 @@ public sealed class TranslatorService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            localError = ex;
+            ReportHybridRoute("번역 보류", "로컬 모델 실패 · 품질 우선으로 자유 문장 Lite 대체 생략");
+            throw new InvalidOperationException(
+                $"스마트 복합 번역 보류 · {localDisplayName}: {ex.Message} · 검증되지 않은 Lite 대체 번역은 표시하지 않습니다.", ex);
         }
-
-        try
-        {
-            var liteResult = await TranslateWithLiteAsync(text, targetLanguage, settings, false, cancellationToken);
-            ReportHybridRoute("Lite 대체", "기본 이상 징후 검사 통과 · 정확도 보장 아님");
-            return liteResult;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            liteError = ex;
-        }
-
-        throw new InvalidOperationException(
-            $"스마트 복합 번역 실패 · {localDisplayName}: {localError?.Message ?? "사용 불가"} · Lite: {liteError?.Message ?? "사용 불가"}");
     }
 
     private void ReportHybridRoute(string route, string reason)
@@ -457,7 +463,10 @@ public sealed class TranslatorService
         value = Regex.Replace(value, @"<think>.*?</think>", "", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         var closingThink = value.LastIndexOf("</think>", StringComparison.OrdinalIgnoreCase);
         if (closingThink >= 0) value = value[(closingThink + "</think>".Length)..];
-        value = value.Trim().Trim('"', '`');
+        value = value.Trim();
+        // Remove only a matched outer wrapper, not one quote belonging to reported speech.
+        if (value.Length >= 2 && value[0] == value[^1] && value[0] is '"' or '`')
+            value = value[1..^1].Trim();
         if (preserveLines) return value;
         return string.Join(" ", value.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)).Trim();
     }

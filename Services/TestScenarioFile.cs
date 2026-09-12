@@ -7,6 +7,7 @@ public sealed class TestScenarioFile
 {
     public string Scenario { get; set; } = "";
     public List<string> Tags { get; set; } = new();
+    public bool FullRegionConsensus { get; set; }
     public List<TestScenarioExpectation> Expectations { get; set; } = new();
 
     public static TestScenarioFile Load(string path)

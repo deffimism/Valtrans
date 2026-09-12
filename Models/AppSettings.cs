@@ -48,6 +48,13 @@ public sealed class AppSettings
     public Dictionary<string, CaptureProfileMetadata> CaptureProfileMetadataByGame { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, OcrEnhancementProfile> OcrEnhancementProfiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> CustomGlossary { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public AppSettings SnapshotForTranslation()
+    {
+        var snapshot = (AppSettings)MemberwiseClone();
+        snapshot.CustomGlossary = new(CustomGlossary, StringComparer.OrdinalIgnoreCase);
+        return snapshot;
+    }
 }
 
 public sealed class OcrEnhancementProfile

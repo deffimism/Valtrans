@@ -1,0 +1,20 @@
+{
+  "scenario": "smoke_consensus_001",
+  "tags": ["mixed", "tactical", "ocr", "consensus"],
+  "fullRegionConsensus": true,
+  "resolution": "1920x1080",
+  "dpi": 100,
+  "background": { "mode": "static-bright", "brightness": 1.15, "motionSpeed": 0 },
+  "fuzz": { "opacityMin": 0.9, "opacityMax": 0.95, "fontSizeJitter": 0 },
+  "chat": { "fontSize": 22, "opacity": 0.95, "lineSpacing": 4 },
+  "events": [
+    { "atMs": 500, "speaker": "PlayerA", "text": "B main", "channel": "TEAM" },
+    { "atMs": 6500, "speaker": "PlayerB", "text": "2 B Heaven", "channel": "TEAM" },
+    { "atMs": 12500, "speaker": "PlayerC", "text": "watch left", "channel": "TEAM" }
+  ],
+  "expectations": [
+    { "source": "B main", "acceptedTranslations": ["B 메인"] },
+    { "source": "2 B Heaven", "acceptedTranslations": ["B 헤븐 2명", "B 헤븐 2"] },
+    { "source": "watch left", "acceptedTranslations": ["왼쪽 조심"] }
+  ]
+}

@@ -10,20 +10,17 @@ using System.Text.Json;
 
 namespace Valtrans.Services;
 
-public sealed class ValtransLiteService : IDisposable
+public sealed partial class ValtransLiteService : IDisposable
 {
     private const string HostResourceName = "Valtrans.Assets.ValtransLiteHost.exe";
-    private const string HostFileName = "ValtransLiteHost-4.exe";
+    private const string HostFileName = "ValtransLiteHost-5.exe";
     private static readonly LiteModelPackage[] Packages =
     [
         new("en", "ko", "1.1", "https://argos-net.com/v1/translate-en_ko-1_1.argosmodel", 120_789_009,
             "e03d8e65e6d44525ec5808c3409fcf8728c76c2c76925372b6d3dc3278de17fc", 132_573_333,
             "3ad29824a57f3842b165c87513bc8723deb1486f91dbb154137be6dc2fa0a777", 775_634,
             "1e732c7195cf4d192bec9abf8f7f91d086edbd8f48aca8be3b1cdcffa530ad8b"),
-        new("ko", "en", "1.1", "https://argos-net.com/v1/translate-ko_en-1_1.argosmodel", 118_852_077,
-            "6da8f3db6ca40f42b1875570a1c06856f6e17c7ef62845d85de217ba548c1471", 132_573_333,
-            "30170587ac837b737a749d4f821feb0925937cc9cbbedcf6aed07b9cf974f6ad", 775_609,
-            "98506598307754afd153041193f46cf8b07c5dadbd5ffbebf67ef1c45ffbe74b"),
+        CreateKoreanEnglishPackage(),
         new("en", "ja", "1.1", "https://argos-net.com/v1/translate-en_ja-1_1.argosmodel", 120_470_284,
             "16300cc4eaa85320520cabcf433b63d01be40ef6966251de72043a083408f716", 132_573_333,
             "52a021f9d552beee5c15ec8f05e2bf72c90402ef428d58f7d625643ba2dc1780", 787_500,
@@ -40,7 +37,7 @@ public sealed class ValtransLiteService : IDisposable
     private Process? _process;
     private string _lastHostError = "";
     private int _loadedModelCount;
-    private int _maxLoadedModels = 2;
+    private int _maxLoadedModels = 4;
     private string _modelUpdateNotice = "";
     private bool _disposed;
 
@@ -72,6 +69,7 @@ public sealed class ValtransLiteService : IDisposable
         if (!string.IsNullOrWhiteSpace(_lastHostError) && !running)
             message = $"로컬 번역 호스트 확인 필요 · {_lastHostError}";
         if (!string.IsNullOrWhiteSpace(_modelUpdateNotice)) message += $" · {_modelUpdateNotice}";
+        if (HasLegacyKoreanEnglish()) message += " · 한국어→영어 개선 모델 업데이트 가능";
         return new LiteStatus(hostReady, installed, Packages.Length, ready, running, _loadedModelCount,
             _maxLoadedModels, message);
     }
@@ -104,10 +102,9 @@ public sealed class ValtransLiteService : IDisposable
                         $"{LanguageName(package.Source)}→{LanguageName(package.Target)} 검사 완료"));
                     continue;
                 }
-                var damagedPath = PairDirectory(package.Source, package.Target);
-                if (Directory.Exists(damagedPath)) Directory.Delete(damagedPath, true);
                 progress?.Report(new LiteProgress(index * 22 + 5,
-                    $"{LanguageName(package.Source)}→{LanguageName(package.Target)} 손상 감지 · 개별 복구 중…"));
+                    $"{LanguageName(package.Source)}→{LanguageName(package.Target)} " +
+                    (package.Source == "ko" && HasLegacyKoreanEnglish() ? "이전 모델 → 품질 개선 모델 준비 중…" : "손상 감지 · 개별 복구 중…")));
             }
 
             await DownloadAndInstallPackageAsync(package, index, progress, cancellationToken);
@@ -159,6 +156,7 @@ public sealed class ValtransLiteService : IDisposable
             var updates = new List<string>();
             foreach (var package in Packages)
             {
+                if (!package.IsArgosIndex) continue;
                 var latest = document.RootElement.EnumerateArray()
                     .Where(item => item.TryGetProperty("from_code", out var source) && source.GetString() == package.Source &&
                                    item.TryGetProperty("to_code", out var target) && target.GetString() == package.Target)
@@ -243,14 +241,15 @@ public sealed class ValtransLiteService : IDisposable
             }
         }
 
-        if (!File.Exists(Path.Combine(stagingPath, "model", "model.bin")) ||
-            !File.Exists(Path.Combine(stagingPath, "sentencepiece.model")))
+        if (!HasPackageFileSizes(stagingPath, package))
             throw new InvalidDataException($"{pair} 모델 패키지가 완전하지 않습니다.");
         if (!await VerifyExtractedPackageAsync(stagingPath, package, cancellationToken))
             throw new InvalidDataException($"{pair} 모델 파일 무결성 검사에 실패했습니다.");
-        if (Directory.Exists(destinationPath)) Directory.Delete(destinationPath, true);
-        Directory.Move(stagingPath, destinationPath);
-        await WriteModelManifestAsync(package, cancellationToken);
+        // Finish all cancellable verification/writes before touching an existing
+        // installation. A failed download must not erase the user's current model.
+        await WriteModelManifestAsync(package, cancellationToken, stagingPath);
+        cancellationToken.ThrowIfCancellationRequested();
+        ActivateVerifiedPackage(stagingPath, destinationPath);
         File.Delete(archivePath);
         progress?.Report(new LiteProgress(basePercent + 22,
             $"{LanguageName(package.Source)}→{LanguageName(package.Target)} 설치 완료"));
@@ -295,13 +294,12 @@ public sealed class ValtransLiteService : IDisposable
     private async Task<bool> VerifyInstalledPackageAsync(LiteModelPackage package, CancellationToken cancellationToken) =>
         await VerifyExtractedPackageAsync(PairDirectory(package.Source, package.Target), package, cancellationToken);
 
-    private static async Task<bool> VerifyExtractedPackageAsync(string directory, LiteModelPackage package,
+    internal static async Task<bool> VerifyExtractedPackageAsync(string directory, LiteModelPackage package,
         CancellationToken cancellationToken)
     {
-        var model = Path.Combine(directory, "model", "model.bin");
-        var tokenizer = Path.Combine(directory, "sentencepiece.model");
-        return await FileMatchesAsync(model, package.ModelBytes, package.ModelSha256, cancellationToken) &&
-               await FileMatchesAsync(tokenizer, package.TokenizerBytes, package.TokenizerSha256, cancellationToken);
+        foreach (var file in RequiredPackageFiles(package))
+            if (!await FileMatchesAsync(Path.Combine(directory, file.Path), file.Bytes, file.Sha256, cancellationToken)) return false;
+        return true;
     }
 
     private static async Task<bool> FileMatchesAsync(string path, long expectedBytes, string expectedSha256,
@@ -314,11 +312,13 @@ public sealed class ValtransLiteService : IDisposable
         return Convert.ToHexStringLower(hash).Equals(expectedSha256, StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task WriteModelManifestAsync(LiteModelPackage package, CancellationToken cancellationToken)
+    private async Task WriteModelManifestAsync(LiteModelPackage package, CancellationToken cancellationToken,
+        string? directory = null)
     {
         var manifest = new LiteModelManifest(package.Version, package.PackageSha256, package.ModelBytes,
-            package.ModelSha256, package.TokenizerBytes, package.TokenizerSha256, DateTimeOffset.UtcNow);
-        var path = Path.Combine(PairDirectory(package.Source, package.Target), "valtrans-manifest.json");
+            package.ModelSha256, package.TokenizerBytes, package.TokenizerSha256, DateTimeOffset.UtcNow,
+            package.TokenizerFileName, package.ExtraFiles);
+        var path = Path.Combine(directory ?? PairDirectory(package.Source, package.Target), "valtrans-manifest.json");
         await File.WriteAllTextAsync(path, JsonSerializer.Serialize(manifest), cancellationToken);
     }
 
@@ -479,10 +479,7 @@ public sealed class ValtransLiteService : IDisposable
         var package = Packages.FirstOrDefault(item => item.Source == source && item.Target == target);
         if (package is null) return false;
         var pairPath = PairDirectory(source, target);
-        var model = Path.Combine(pairPath, "model", "model.bin");
-        var tokenizer = Path.Combine(pairPath, "sentencepiece.model");
-        return File.Exists(model) && new FileInfo(model).Length == package.ModelBytes &&
-               File.Exists(tokenizer) && new FileInfo(tokenizer).Length == package.TokenizerBytes;
+        return HasPackageFileSizes(pairPath, package) || source == "ko" && target == "en" && HasLegacyKoreanEnglish();
     }
 
     private string PairDirectory(string source, string target) =>
@@ -567,6 +564,9 @@ public sealed record LiteStatus(bool HostReady, int InstalledModels, int TotalMo
 public sealed record LiteProgress(double Percent, string Message);
 public sealed record LiteResult(bool Success, string Message);
 internal sealed record LiteModelPackage(string Source, string Target, string Version, string Url, long ExpectedBytes,
-    string PackageSha256, long ModelBytes, string ModelSha256, long TokenizerBytes, string TokenizerSha256);
+    string PackageSha256, long ModelBytes, string ModelSha256, long TokenizerBytes, string TokenizerSha256,
+    string TokenizerFileName = "sentencepiece.model", IReadOnlyList<LitePackageFile>? ExtraFiles = null, bool IsArgosIndex = true);
+internal sealed record LitePackageFile(string Path, long Bytes, string Sha256);
 internal sealed record LiteModelManifest(string Version, string PackageSha256, long ModelBytes, string ModelSha256,
-    long TokenizerBytes, string TokenizerSha256, DateTimeOffset VerifiedAt);
+    long TokenizerBytes, string TokenizerSha256, DateTimeOffset VerifiedAt,
+    string TokenizerFileName = "sentencepiece.model", IReadOnlyList<LitePackageFile>? ExtraFiles = null);

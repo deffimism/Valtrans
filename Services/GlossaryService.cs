@@ -129,6 +129,14 @@ public sealed partial class GlossaryService
         {
             ["안녕"] = ("hello", "안녕", "こんにちは"),
             ["안녕하세요"] = ("hello", "안녕", "こんにちは"),
+            ["잘 부탁해"] = ("let's have a good game", "잘 부탁해", "よろしく"),
+            ["잘 부탁드립니다"] = ("let's have a good game", "잘 부탁드립니다", "よろしくお願いします"),
+            ["잘 부탁드려요"] = ("let's have a good game", "잘 부탁드려요", "よろしくお願いします"),
+            ["ナイストライ"] = ("nice try", "아깝다", "ナイストライ"),
+            ["좋은 시도였어"] = ("nice try", "좋은 시도였어", "ナイストライ"),
+            ["np dw"] = ("no problem, don't worry", "괜찮아, 걱정 마", "大丈夫、心配しないで"),
+            ["괜찮아 걱정 마"] = ("no problem, don't worry", "괜찮아, 걱정 마", "大丈夫、心配しないで"),
+            ["大丈夫、心配しないで"] = ("no problem, don't worry", "괜찮아, 걱정 마", "大丈夫、心配しないで"),
             ["반가워"] = ("nice to meet you", "반가워", "よろしく"),
             ["고마워"] = ("thanks", "고마워", "ありがとう"),
             ["감사"] = ("thanks", "고마워", "ありがとう"),
@@ -252,6 +260,14 @@ public sealed partial class GlossaryService
             ["revive me"] = ("revive me", "살려줘", "蘇生お願い"),
             ["rez me"] = ("revive me", "살려줘", "蘇生お願い")
         };
+
+    // Map names remain glossary references, but are not player/agent names for
+    // closed damage and health grammars. Unknown custom actors go to the model.
+    private static readonly HashSet<string> MapProperNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Ascent", "Bind", "Haven", "Split", "Icebox", "Breeze", "Fracture", "Pearl",
+        "Lotus", "Sunset", "Abyss", "Corrode", "Summit"
+    };
 
     // Official English character names (Riot/EA) and map names (Riot map directory).
     private static readonly Dictionary<string, string> ProperNames = new(StringComparer.OrdinalIgnoreCase)
@@ -462,6 +478,10 @@ public sealed partial class GlossaryService
             ChatTextSanitizer.ContentForLanguageDetection(text).Trim());
         translated = "";
         if (text.Length == 0) return false;
+        if (TryTranslatePlayerState(text, target, settings, out translated)) return true;
+        if (TryTranslateActionIntent(text, target, settings, out translated)) return true;
+        if (TryTranslateTacticalState(text, target, settings, out translated)) return true;
+        if (TryTranslateLocationCorrection(text, target, settings, out translated)) return true;
         if (TryTranslateChineseTacticalBriefing(text, target, settings, out translated)) return true;
         if (TryTranslateSiteActionBriefing(text, target, out translated)) return true;
         if (TryTranslateExactDirectionalBriefing(text, target, out translated)) return true;
@@ -595,7 +615,7 @@ public sealed partial class GlossaryService
         var rotatePatterns = new[]
         {
             @"^(?:i(?:'m| am)?\s+)?(?:rotate|rotating|go|going|move|moving)(?:\s+to)?\s+(?<location>[A-Za-z0-9][\w\s'-]{0,30})[.!]?$",
-            @"^(?<location>.+?)(?:로|으로)\s*(?:로테(?:할게|하자|중)?|이동(?:할게|하자|중)?|갈게|가자|돌(?:자|게)).*$",
+            @"^(?<location>.+?)(?:로|으로)\s*(?:로테(?:할게|하자|중)?|이동(?:할게|하자|중)?|갈게|가자|돌(?:자|게))[.!]?$",
             @"^(?<location>.+?)(?:へ|に)\s*(?:ローテ|移動|行)(?:する|こう|く|きます|こう)?[。.!]?$"
         };
         foreach (var pattern in rotatePatterns)
@@ -603,6 +623,10 @@ public sealed partial class GlossaryService
             var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             if (!match.Success) continue;
             var location = NormalizeCalloutLocation(match.Groups["location"].Value, settings);
+            // A sentence fragment is not a destination. In particular, never turn
+            // "going to eat after this match" or "B 말고 A" into a rotate call.
+            if (!IsLikelyLocation(location, settings)) continue;
+            location = LocalizeCalloutLocation(location, target, settings);
             translated = target switch
             {
                 "KO" => $"{location} · 로테",
@@ -612,6 +636,16 @@ public sealed partial class GlossaryService
             return true;
         }
 
+        // A standalone, known location is not a request to invent an enemy count.
+        // Only exact locations are eligible; predicates and compound clauses stay
+        // on the translation path above.
+        var standaloneLocation = NormalizeCalloutLocation(text, settings);
+        if (IsLikelyLocation(standaloneLocation, settings) &&
+            !Regex.IsMatch(text, @"[!?？！]"))
+        {
+            translated = LocalizeCalloutLocation(standaloneLocation, target, settings);
+            return true;
+        }
         return false;
     }
 
@@ -620,6 +654,7 @@ public sealed partial class GlossaryService
         value = value.Trim().TrimEnd('.', '。', '!', '?');
         value = Regex.Replace(value, @"^(?:at|in|on|to)\s+", "", RegexOptions.IgnoreCase);
         value = Regex.Replace(value, @"(?:에서|으로|에|로|には|では|に|で|へ)$", "");
+        value = Regex.Replace(value, @"^(?<prefix>[ABC]\s*)?(?:사이트|サイト)$", "${prefix}Site", RegexOptions.IgnoreCase);
         value = NormalizeLocations(value, settings);
         var compound = Regex.Match(value, @"^(?<site>[ABC])\s*(?<area>.+)$", RegexOptions.IgnoreCase);
         if (compound.Success && IsLikelyLocation(compound.Groups["area"].Value, settings))
@@ -637,7 +672,7 @@ public sealed partial class GlossaryService
 
     private static string? CanonicalCharacterName(string value, AppSettings settings) =>
         ProperNames.Values.Concat(settings.CustomGlossary.Values)
-            .FirstOrDefault(name => name.Equals(value, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(name => !MapProperNames.Contains(name) && name.Equals(value, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsSiteActionCallout(string text) =>
         Regex.IsMatch(text.Trim(),
@@ -666,10 +701,11 @@ public sealed partial class GlossaryService
 
     private static string NormalizeCount(string value) => value.ToLowerInvariant() switch
     {
-        "one" or "한" or "一" or "一人" or "ひとり" => "1",
+        "one" or "한" or "하나" or "一" or "一人" or "ひとり" => "1",
         "two" or "두" or "둘" or "二" or "二人" or "ふたり" => "2",
         "three" or "세" or "셋" or "三" or "三人" => "3",
         "four" or "네" or "넷" or "四" or "四人" => "4",
+        "five" or "다섯" or "五" or "五人" => "5",
         _ => value
     };
 

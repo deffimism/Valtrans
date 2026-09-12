@@ -39,7 +39,6 @@ public sealed class MessageClassifierService
         var trimmed = text.Trim();
         if (trimmed.Length == 0) return false;
         return trimmed.StartsWith("[SYSTEM]", StringComparison.OrdinalIgnoreCase) ||
-               trimmed.StartsWith("SYSTEM:", StringComparison.OrdinalIgnoreCase) ||
-               Regex.IsMatch(trimmed, @"^(?:Match|Round|Combat|Buy phase|Spike)", RegexOptions.IgnoreCase);
+               trimmed.StartsWith("SYSTEM:", StringComparison.OrdinalIgnoreCase);
     }
 }
